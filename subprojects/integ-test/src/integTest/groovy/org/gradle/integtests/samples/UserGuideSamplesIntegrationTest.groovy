@@ -16,7 +16,6 @@
 
 package org.gradle.integtests.samples
 
-import org.gradle.integtests.fixtures.UserGuideSamplesRunner
 import org.junit.runner.RunWith
 
 @RunWith(UserGuideSamplesRunner.class)
@@ -27,7 +26,7 @@ class UserGuideSamplesIntegrationTest {
      If you're working in samples area there're gradle tasks that you should know of:
      - gradle intTestImage makes sure that the samples' resources are copied to the right place
      - gradle docs:userguideDocbook makes sure that samples' info is extracted from XMLs
-     - the 'expected' content of the asserting mechanism lives under docs/samples/userguideOutput
+     - the 'expected' content of the asserting mechanism lives under docs/src/samples/userguideOutput
 
     */
 }

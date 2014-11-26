@@ -17,18 +17,9 @@
 package org.gradle.plugins.ide
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.integtests.fixtures.executer.ExecutionResult
+import org.gradle.plugins.ide.idea.IdeaModuleFixture
 
 abstract class AbstractIdeIntegrationSpec extends AbstractIntegrationSpec {
-    protected ExecutionResult runTask(taskName, settingsScript = "rootProject.name = 'root'", buildScript) {
-        def settingsFile = file("settings.gradle")
-        settingsFile << settingsScript
-
-        def buildFile = file("build.gradle")
-        buildFile << buildScript
-
-        return executer.usingSettingsFile(settingsFile).usingBuildScript(buildFile).withTasks(taskName).run()
-    }
 
     protected File getFile(Map options, String filename) {
         def file = options?.project ? file(options.project, filename) : file(filename)
@@ -39,5 +30,9 @@ abstract class AbstractIdeIntegrationSpec extends AbstractIntegrationSpec {
     protected parseFile(Map options = [:], String filename) {
         def file = getFile(options, filename)
         new XmlSlurper().parse(file)
+    }
+
+    protected IdeaModuleFixture parseIml(Map options = [:], String moduleFile) {
+        return new IdeaModuleFixture(parseFile(options, moduleFile))
     }
 }

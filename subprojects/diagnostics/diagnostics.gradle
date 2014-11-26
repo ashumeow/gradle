@@ -19,8 +19,14 @@ dependencies {
     compile project(':core')
     compile project(':reporting')
     compile project(':plugins')
-    compile project(':coreImpl')
+    compile project(':platformNative')
+    compile project(':languageNative')
+    compile project(':dependencyManagement')
+    compile project(':platformPlay')
+
+    integTestRuntime project(':cunit')
 }
 
 useTestFixtures()
-useTestFixtures(project: ':coreImpl')
+useTestFixtures(project: ':dependencyManagement')
+useTestFixtures(project: ':platformNative', sourceSet: 'testFixtures')

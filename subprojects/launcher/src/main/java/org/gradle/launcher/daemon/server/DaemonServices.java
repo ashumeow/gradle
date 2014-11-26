@@ -15,24 +15,29 @@
  */
 package org.gradle.launcher.daemon.server;
 
-import org.gradle.internal.service.scopes.GlobalScopeServices;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
 import org.gradle.initialization.GradleLauncherFactory;
 import org.gradle.internal.concurrent.ExecutorFactory;
-import org.gradle.internal.nativeplatform.ProcessEnvironment;
-import org.gradle.internal.nativeplatform.services.NativeServices;
+import org.gradle.internal.nativeintegration.ProcessEnvironment;
+import org.gradle.internal.nativeintegration.services.NativeServices;
 import org.gradle.internal.service.DefaultServiceRegistry;
 import org.gradle.internal.service.ServiceRegistry;
+import org.gradle.internal.service.scopes.GlobalScopeServices;
 import org.gradle.launcher.daemon.configuration.DaemonServerConfiguration;
 import org.gradle.launcher.daemon.context.DaemonContext;
 import org.gradle.launcher.daemon.context.DaemonContextBuilder;
 import org.gradle.launcher.daemon.registry.DaemonDir;
 import org.gradle.launcher.daemon.registry.DaemonRegistry;
 import org.gradle.launcher.daemon.registry.DaemonRegistryServices;
-import org.gradle.launcher.daemon.server.exec.DaemonHygieneAction;
 import org.gradle.launcher.daemon.server.exec.DefaultDaemonCommandExecuter;
+import org.gradle.launcher.daemon.server.exec.StopHandlingCommandExecuter;
+import org.gradle.launcher.daemon.server.health.DaemonHealthServices;
+import org.gradle.launcher.daemon.server.health.DefaultDaemonHealthServices;
+import org.gradle.launcher.exec.InProcessBuildActionExecuter;
 import org.gradle.logging.LoggingManagerInternal;
+import org.gradle.messaging.remote.internal.MessagingServices;
+import org.gradle.messaging.remote.internal.inet.InetAddressFactory;
 
 import java.io.File;
 import java.util.UUID;
@@ -74,17 +79,26 @@ public class DaemonServices extends DefaultServiceRegistry {
         return new File(get(DaemonDir.class).getVersionedDir(), fileName);
     }
 
+    protected DaemonHealthServices createDaemonHealthServices() {
+        return new DefaultDaemonHealthServices();
+    }
+
     protected Daemon createDaemon() {
         return new Daemon(
-                new DaemonTcpServerConnector(),
+                new DaemonTcpServerConnector(
+                    get(ExecutorFactory.class),
+                    get(MessagingServices.class).get(InetAddressFactory.class)),
                 get(DaemonRegistry.class),
                 get(DaemonContext.class),
                 "password",
-                new DefaultDaemonCommandExecuter(
-                        get(GradleLauncherFactory.class),
-                        get(ProcessEnvironment.class),
-                        loggingManager,
-                        getDaemonLogFile(), new DaemonHygieneAction()),
+                new StopHandlingCommandExecuter(
+                        new DefaultDaemonCommandExecuter(
+                                new InProcessBuildActionExecuter(
+                                        get(GradleLauncherFactory.class)),
+                                get(ProcessEnvironment.class),
+                                loggingManager,
+                                getDaemonLogFile(),
+                                get(DaemonHealthServices.class))),
                 get(ExecutorFactory.class));
     }
 

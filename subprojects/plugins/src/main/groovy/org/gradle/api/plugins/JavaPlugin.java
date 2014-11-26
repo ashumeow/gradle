@@ -60,7 +60,11 @@ public class JavaPlugin implements Plugin<Project> {
     public static final String TEST_COMPILE_CONFIGURATION_NAME = "testCompile";
 
     public void apply(Project project) {
-        project.getPlugins().apply(JavaBasePlugin.class);
+        project.apply(new Action<ObjectConfigurationAction>() {
+            public void execute(ObjectConfigurationAction objectConfigurationAction) {
+                objectConfigurationAction.plugin(JavaBasePlugin.class);
+            }
+        });
 
         JavaPluginConvention javaConvention = project.getConvention().getPlugin(JavaPluginConvention.class);
         project.getConvention().getPlugins().put("embeddedJavaProject", new EmbeddableJavaProjectImpl(javaConvention));
@@ -98,15 +102,9 @@ public class JavaPlugin implements Plugin<Project> {
 
     private void configureArchivesAndComponent(final Project project, final JavaPluginConvention pluginConvention) {
         Jar jar = project.getTasks().create(JAR_TASK_NAME, Jar.class);
-        jar.getManifest().from(pluginConvention.getManifest());
         jar.setDescription("Assembles a jar archive containing the main classes.");
         jar.setGroup(BasePlugin.BUILD_GROUP);
         jar.from(pluginConvention.getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME).getOutput());
-        jar.getMetaInf().from(new Callable() {
-            public Object call() throws Exception {
-                return pluginConvention.getMetaInf();
-            }
-        });
 
         ArchivePublishArtifact jarArtifact = new ArchivePublishArtifact(jar);
         Configuration runtimeConfiguration = project.getConfigurations().getByName(RUNTIME_CONFIGURATION_NAME);

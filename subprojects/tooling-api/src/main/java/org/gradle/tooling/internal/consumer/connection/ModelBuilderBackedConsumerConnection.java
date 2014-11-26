@@ -17,45 +17,43 @@
 package org.gradle.tooling.internal.consumer.connection;
 
 import org.gradle.tooling.internal.adapter.ProtocolToModelAdapter;
-import org.gradle.tooling.internal.consumer.parameters.ConsumerOperationParameters;
 import org.gradle.tooling.internal.consumer.versioning.ModelMapping;
 import org.gradle.tooling.internal.consumer.versioning.VersionDetails;
 import org.gradle.tooling.internal.protocol.ConnectionVersion4;
 import org.gradle.tooling.internal.protocol.ModelBuilder;
 import org.gradle.tooling.model.gradle.BuildInvocations;
 import org.gradle.tooling.model.gradle.GradleBuild;
-import org.gradle.util.GradleVersion;
 
 /**
  * An adapter for a {@link ModelBuilder} based provider.
+ *
+ * <p>Used for providers >= 1.6 and <= 1.8</p>
  */
 public class ModelBuilderBackedConsumerConnection extends AbstractPost12ConsumerConnection {
     private final ModelProducer modelProducer;
+    private final ActionRunner actionRunner;
 
     public ModelBuilderBackedConsumerConnection(ConnectionVersion4 delegate, ModelMapping modelMapping, ProtocolToModelAdapter adapter) {
-        super(delegate, getVersionDetails(delegate.getMetaData().getVersion()));
+        super(delegate, new R16VersionDetails(delegate.getMetaData().getVersion()));
         ModelBuilder builder = (ModelBuilder) delegate;
-        ModelProducer consumerConnectionBackedModelProducer = new ModelBuilderBackedModelProducer(adapter, getVersionDetails(), modelMapping, builder);
-        ModelProducer producerWithGradleBuild = new GradleBuildAdapterProducer(adapter, getVersionDetails(), modelMapping, consumerConnectionBackedModelProducer);
-        modelProducer = new BuildInvocationsAdapterProducer(adapter, getVersionDetails(), modelMapping, producerWithGradleBuild);
+        ModelProducer modelProducer =  new ModelBuilderBackedModelProducer(adapter, getVersionDetails(), modelMapping, builder);
+        modelProducer = new GradleBuildAdapterProducer(adapter, modelProducer);
+        modelProducer = new BuildInvocationsAdapterProducer(adapter, getVersionDetails(), modelProducer);
+        this.modelProducer = modelProducer;
+        this.actionRunner = new UnsupportedActionRunner(getVersionDetails());
     }
 
-    public static VersionDetails getVersionDetails(String versionString) {
-        GradleVersion version = GradleVersion.version(versionString);
-        if (version.compareTo(GradleVersion.version("1.11")) > 0) {
-            return new R112VersionDetails(version.getVersion());
-        }
-        if (version.compareTo(GradleVersion.version("1.8-rc-1")) >= 0) {
-            return new R18VersionDetails(version.getVersion());
-        }
-        return new R16VersionDetails(version.getVersion());
+    @Override
+    protected ActionRunner getActionRunner() {
+        return actionRunner;
     }
 
-    public <T> T run(Class<T> type, ConsumerOperationParameters operationParameters) throws UnsupportedOperationException, IllegalStateException {
-        return modelProducer.produceModel(type, operationParameters);
+    @Override
+    protected ModelProducer getModelProducer() {
+        return modelProducer;
     }
 
-    private static class R16VersionDetails extends VersionDetails {
+    static class R16VersionDetails extends VersionDetails {
         public R16VersionDetails(String version) {
             super(version);
         }
@@ -64,44 +62,6 @@ public class ModelBuilderBackedConsumerConnection extends AbstractPost12Consumer
         public boolean maySupportModel(Class<?> modelType) {
             return modelType != BuildInvocations.class
                     && modelType != GradleBuild.class;
-        }
-
-        @Override
-        public boolean supportsGradleProjectModel() {
-            return true;
-        }
-    }
-
-    private static class R18VersionDetails extends R16VersionDetails {
-        private R18VersionDetails(String version) {
-            super(version);
-        }
-
-        @Override
-        public boolean maySupportModel(Class<?> modelType) {
-            if (modelType == GradleBuild.class) {
-                return true;
-            }
-            return super.maySupportModel(modelType);
-        }
-    }
-
-    private static class R112VersionDetails extends R18VersionDetails {
-        private R112VersionDetails(String version) {
-            super(version);
-        }
-
-        @Override
-        public boolean maySupportModel(Class<?> modelType) {
-            if (modelType == BuildInvocations.class) {
-                return true;
-            }
-            return super.maySupportModel(modelType);
-        }
-
-        @Override
-        public boolean supportsTaskDisplayName() {
-            return true;
         }
     }
 }

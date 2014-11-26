@@ -41,14 +41,17 @@ import org.gradle.util.ConfigureUtil
  *     //you can update the source wildcards
  *     wildcards += '!?*.ruby'
  *
- *     //you can change the modules of the the *.ipr
+ *     //you can configure the VCS used by the project
+ *     vcs = 'Git'
+ *
+ *     //you can change the modules of the *.ipr
  *     //modules = project(':someProject').idea.module
  *
  *     //you can change the output file
  *     outputFile = new File(outputFile.parentFile, 'someBetterName.ipr')
  *
  *     //you can add project-level libraries
- *     projectLibraries &lt;&lt; new ProjectLibrary(name: "my-library", classes: [new Path("path/to/library")])
+ *     projectLibraries &lt;&lt; new ProjectLibrary(name: "my-library", classes: [new File("path/to/library")])
  *   }
  * }
  * </pre>
@@ -119,6 +122,16 @@ class IdeaProject {
     }
 
     /**
+     * The vcs for the project.
+     * <p>
+     * Values are the same as used in IDEA's “Version Control” preference window (e.g. 'Git', 'Subversion').
+     * <p>
+     * See the examples in the docs for {@link IdeaProject}.
+     */
+    @Incubating
+    String vcs
+
+    /**
      * The wildcard resource patterns.
      * <p>
      * See the examples in the docs for {@link IdeaProject}.
@@ -172,7 +185,7 @@ class IdeaProject {
         def modulePaths = getModules().collect {
             getPathFactory().relativePath('PROJECT_DIR', it.outputFile)
         }
-        xmlProject.configure(modulePaths, getJdkName(), getLanguageLevel(), getWildcards(), getProjectLibraries())
+        xmlProject.configure(modulePaths, getJdkName(), getLanguageLevel(), getWildcards(), getProjectLibraries(), getVcs())
         ipr.whenMerged.execute(xmlProject)
     }
 }

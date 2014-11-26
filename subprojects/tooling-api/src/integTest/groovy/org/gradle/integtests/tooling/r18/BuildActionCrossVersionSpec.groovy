@@ -52,6 +52,39 @@ class BuildActionCrossVersionSpec extends ToolingApiSpecification {
         nullModel == null
     }
 
+    @TargetGradleVersion(">=2.2")
+    def "action classes are reused"() {
+        toolingApi.requireIsolatedDaemons()
+
+        expect:
+        def result1 = withConnection { it.action(new CounterAction()).run() }
+        def result2 = withConnection { it.action(new CounterAction()).run() }
+        def result3 = withConnection { it.action(new CounterAction()).run() }
+        result1 == 1
+        result2 == 2
+        result3 == 3
+    }
+
+    @TargetGradleVersion(">=1.8 <=2.1")
+    def "action classes are reused when daemon is idle when operation starts"() {
+        toolingApi.requireIsolatedDaemons()
+
+        expect:
+        def result1 = withConnection { it.action(new CounterAction()).run() }
+
+        // Earlier versions return the build result before marking the daemon as idle. Wait for the daemon to be marked as idle
+        // before attempting the next operation otherwise the client will start a new daemon
+        toolingApi.daemons.daemon.becomesIdle()
+
+        def result2 = withConnection { it.action(new CounterAction()).run() }
+        toolingApi.daemons.daemon.becomesIdle()
+
+        def result3 = withConnection { it.action(new CounterAction()).run() }
+        result1 == 1
+        result2 == 2
+        result3 == 3
+    }
+
     def "client receives the exception thrown by the build action"() {
         when:
         withConnection { it.action(new BrokenAction()).run() }
@@ -67,6 +100,7 @@ class BuildActionCrossVersionSpec extends ToolingApiSpecification {
         withConnection { it.action(new FetchUnknownModel()).run() }
 
         then:
+        // Verification is in the action
         noExceptionThrown()
     }
 
@@ -92,7 +126,7 @@ class BuildActionCrossVersionSpec extends ToolingApiSpecification {
     }
 
     @ToolingApiVersion('current')
-    @TargetGradleVersion('<1.8')
+    @TargetGradleVersion('>=1.0-milestone-8 <1.8')
     def "gives reasonable error message when target Gradle version does not support build actions"() {
         when:
         withConnection { it.action(new FetchCustomModel()).run() }

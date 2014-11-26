@@ -16,16 +16,16 @@
 
 package org.gradle.api.internal.changedetection.rules;
 
+import org.gradle.api.UncheckedIOException;
 import org.gradle.api.internal.TaskInternal;
-import org.gradle.api.internal.changedetection.state.FileCollectionSnapshotter;
-import org.gradle.api.internal.changedetection.state.TaskExecution;
-import org.gradle.api.internal.changedetection.state.TaskHistoryRepository;
+import org.gradle.api.internal.changedetection.state.*;
 
 /**
  * Represents the complete changes in a tasks state
  */
 public class TaskUpToDateState {
     private static final int MAX_OUT_OF_DATE_MESSAGES = 3;
+    private final FilesSnapshotSet inputFilesSnapshot;
 
     private TaskStateChanges noHistoryState;
     private TaskStateChanges inputFilesState;
@@ -42,8 +42,23 @@ public class TaskUpToDateState {
         noHistoryState = NoHistoryStateChangeRule.create(task, lastExecution);
         taskTypeState = TaskTypeStateChangeRule.create(task, lastExecution, thisExecution);
         inputPropertiesState = InputPropertiesStateChangeRule.create(task, lastExecution, thisExecution);
-        outputFilesState = caching(OutputFilesStateChangeRule.create(task, lastExecution, thisExecution, outputFilesSnapshotter));
-        inputFilesState = caching(InputFilesStateChangeRule.create(task, lastExecution, thisExecution, inputFilesSnapshotter));
+
+        // Capture outputs state
+        try {
+            outputFilesState = caching(OutputFilesStateChangeRule.create(task, lastExecution, thisExecution, outputFilesSnapshotter));
+        } catch (UncheckedIOException e) {
+            throw new UncheckedIOException(String.format("Failed to capture snapshot of output files for task '%s' during up-to-date check.  See stacktrace for details.", task.getName()), e);
+        }
+
+        // Capture inputs state
+        try {
+            FileCollectionSnapshot inputFilesSnapshot = inputFilesSnapshotter.snapshot(task.getInputs().getFiles());
+            this.inputFilesSnapshot = inputFilesSnapshot.getSnapshot();
+            inputFilesState = caching(InputFilesStateChangeRule.create(lastExecution, thisExecution, inputFilesSnapshot));
+        } catch (UncheckedIOException e) {
+            throw new UncheckedIOException(String.format("Failed to capture snapshot of input files for task '%s' during up-to-date check.  See stacktrace for details.", task.getName()), e);
+        }
+
         allTaskChanges = new SummaryTaskStateChanges(MAX_OUT_OF_DATE_MESSAGES, noHistoryState, taskTypeState, inputPropertiesState, outputFilesState, inputFilesState);
         rebuildChanges = new SummaryTaskStateChanges(1, noHistoryState, taskTypeState, inputPropertiesState, outputFilesState);
     }
@@ -62,5 +77,9 @@ public class TaskUpToDateState {
 
     public TaskStateChanges getRebuildChanges() {
         return rebuildChanges;
+    }
+
+    public FilesSnapshotSet getInputFilesSnapshot() {
+        return inputFilesSnapshot;
     }
 }

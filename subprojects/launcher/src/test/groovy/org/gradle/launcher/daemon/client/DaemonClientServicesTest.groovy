@@ -15,19 +15,28 @@
  */
 package org.gradle.launcher.daemon.client
 
+import org.gradle.initialization.BuildLayoutParameters
+import org.gradle.internal.nativeintegration.services.NativeServices
+import org.gradle.internal.service.ServiceRegistryBuilder
+import org.gradle.internal.service.scopes.GlobalScopeServices
 import org.gradle.launcher.daemon.configuration.DaemonParameters
+import org.gradle.launcher.daemon.context.DaemonContext
 import org.gradle.launcher.daemon.registry.DaemonRegistry
 import org.gradle.launcher.daemon.registry.PersistentDaemonRegistry
 import org.gradle.logging.LoggingServiceRegistry
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.junit.Rule
 import spock.lang.Specification
-import org.gradle.initialization.BuildLayoutParameters
 
 class DaemonClientServicesTest extends Specification {
     @Rule TestNameTestDirectoryProvider tmp = new TestNameTestDirectoryProvider()
     final DaemonParameters parameters = new DaemonParameters(new BuildLayoutParameters()).setBaseDir(tmp.testDirectory)
-    final DaemonClientServices services = new DaemonClientServices(LoggingServiceRegistry.newEmbeddableLogging(), parameters, System.in)
+    final parentServices = ServiceRegistryBuilder.builder()
+            .parent(LoggingServiceRegistry.newEmbeddableLogging())
+            .parent(NativeServices.instance)
+            .provider(new GlobalScopeServices(false))
+            .build()
+    final services = new DaemonClientServices(parentServices, parameters, System.in)
 
     def "makes a DaemonRegistry available"() {
         expect:
@@ -43,4 +52,10 @@ class DaemonClientServicesTest extends Specification {
         expect:
         services.get(DaemonClient) != null
     }
+
+    def "context includes locale"() {
+        expect:
+        services.get(DaemonContext).daemonOpts.contains("-Duser.language=${Locale.default.language}".toString())
+    }
+
 }

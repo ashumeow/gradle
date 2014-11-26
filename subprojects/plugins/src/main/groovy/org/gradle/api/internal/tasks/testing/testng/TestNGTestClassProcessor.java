@@ -17,15 +17,14 @@
 package org.gradle.api.internal.tasks.testing.testng;
 
 import org.gradle.api.GradleException;
-import org.gradle.api.internal.tasks.testing.TestClassProcessor;
-import org.gradle.api.internal.tasks.testing.TestClassRunInfo;
-import org.gradle.api.internal.tasks.testing.TestResultProcessor;
-import org.gradle.api.internal.tasks.testing.processors.CaptureTestOutputTestResultProcessor;
+import org.gradle.api.InvalidUserDataException;
+import org.gradle.api.internal.tasks.testing.*;
 import org.gradle.api.internal.tasks.testing.filter.TestSelectionMatcher;
+import org.gradle.api.internal.tasks.testing.results.AttachParentTestResultProcessor;
+import org.gradle.api.tasks.testing.testng.TestNGOptions;
 import org.gradle.internal.id.IdGenerator;
 import org.gradle.internal.reflect.JavaReflectionUtil;
 import org.gradle.internal.reflect.NoSuchMethodException;
-import org.gradle.logging.StandardOutputRedirector;
 import org.gradle.util.CollectionUtils;
 import org.gradle.util.GFileUtils;
 import org.testng.*;
@@ -42,24 +41,18 @@ public class TestNGTestClassProcessor implements TestClassProcessor {
     private final TestNGSpec options;
     private final List<File> suiteFiles;
     private final IdGenerator<?> idGenerator;
-    private final StandardOutputRedirector outputRedirector;
-    private TestNGTestResultProcessorAdapter testResultProcessor;
     private ClassLoader applicationClassLoader;
+    private TestResultProcessor resultProcessor;
 
-    public TestNGTestClassProcessor(File testReportDir, TestNGSpec options, List<File> suiteFiles, IdGenerator<?> idGenerator,
-                                    StandardOutputRedirector outputRedirector) {
+    public TestNGTestClassProcessor(File testReportDir, TestNGSpec options, List<File> suiteFiles, IdGenerator<?> idGenerator) {
         this.testReportDir = testReportDir;
         this.options = options;
         this.suiteFiles = suiteFiles;
         this.idGenerator = idGenerator;
-        this.outputRedirector = outputRedirector;
     }
 
     public void startProcessing(TestResultProcessor resultProcessor) {
-        TestResultProcessor resultProcessorChain = new CaptureTestOutputTestResultProcessor(resultProcessor, outputRedirector);
-
-        testResultProcessor = new TestNGTestResultProcessorAdapter(resultProcessorChain, idGenerator);
-
+        this.resultProcessor = resultProcessor;
         applicationClassLoader = Thread.currentThread().getContextClassLoader();
     }
 
@@ -78,6 +71,14 @@ public class TestNGTestClassProcessor implements TestClassProcessor {
         testNg.setDefaultTestName(options.getDefaultTestName());
         testNg.setParallel(options.getParallel());
         testNg.setThreadCount(options.getThreadCount());
+        String configFailurePolicy = options.getConfigFailurePolicy();
+        try {
+            JavaReflectionUtil.method(TestNG.class, Object.class, "setConfigFailurePolicy", String.class).invoke(testNg, configFailurePolicy);
+        } catch (NoSuchMethodException e) {
+            if (!configFailurePolicy.equals(TestNGOptions.DEFAULT_CONFIG_FAILURE_POLICY)) {
+                throw new InvalidUserDataException(String.format("The version of TestNG used does not support setting config failure policy to '%s'.", configFailurePolicy));
+            }
+        }
         try {
             JavaReflectionUtil.method(TestNG.class, Object.class, "setAnnotations").invoke(testNg, options.getAnnotations());
         } catch (NoSuchMethodException e) {
@@ -101,18 +102,30 @@ public class TestNGTestClassProcessor implements TestClassProcessor {
                 throw new GradleException(String.format("Could not add a test listener with class '%s'.", listenerClass), e);
             }
         }
-        testNg.addListener((Object) adaptListener(testResultProcessor));
+
         if (!options.getIncludedTests().isEmpty()) {
             testNg.addListener(new SelectedTestsFilter(options.getIncludedTests()));
         }
 
         if (!suiteFiles.isEmpty()) {
             testNg.setTestSuites(GFileUtils.toPaths(suiteFiles));
+            //For suites execution, we're emitting an artificial started/completed event that wraps the actual test execution
+            //This is required for consistency with non-suites execution and correct behavior of output capturing
+            Object rootId = idGenerator.generateId();
+            TestDescriptorInternal rootSuite = new DefaultTestSuiteDescriptor(rootId, options.getDefaultTestName());
+            TestResultProcessor decorator = new AttachParentTestResultProcessor(resultProcessor);
+            decorator.started(rootSuite, new TestStartEvent(System.currentTimeMillis()));
+            testNg.addListener((Object) adaptListener(new TestNGTestResultProcessorAdapter(decorator, idGenerator)));
+            try {
+                testNg.run();
+            } finally {
+                decorator.completed(rootId, new TestCompleteEvent(System.currentTimeMillis()));
+            }
         } else {
             testNg.setTestClasses(testClasses.toArray(new Class[testClasses.size()]));
+            testNg.addListener((Object) adaptListener(new TestNGTestResultProcessorAdapter(resultProcessor, idGenerator)));
+            testNg.run();
         }
-
-        testNg.run();
     }
 
     private ITestListener adaptListener(ITestListener listener) {

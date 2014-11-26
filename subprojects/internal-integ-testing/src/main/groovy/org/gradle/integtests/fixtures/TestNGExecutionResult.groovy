@@ -86,7 +86,7 @@ class TestNGExecutionResult implements TestExecutionResult {
     }
 }
 
-private class TestNgTestClassExecutionResult implements TestClassExecutionResult {
+class TestNgTestClassExecutionResult implements TestClassExecutionResult {
     def String testClass
     def GPathResult testClassNode
 
@@ -147,6 +147,11 @@ private class TestNgTestClassExecutionResult implements TestClassExecutionResult
     }
 
     TestClassExecutionResult assertTestCaseStderr(String testCaseName, Matcher<? super String> matcher) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    TestClassExecutionResult assertExecutionFailedWithCause(Matcher<? super String> causeMatcher) {
         throw new UnsupportedOperationException();
     }
 

@@ -15,7 +15,6 @@
  */
 package org.gradle.integtests.fixtures.executer;
 
-import org.gradle.api.JavaVersion;
 import org.gradle.api.Transformer;
 import org.gradle.test.fixtures.file.TestDirectoryProvider;
 
@@ -44,7 +43,7 @@ public class DaemonGradleExecuter extends ForkingGradleExecuter {
             }
         }
 
-        // Workaround for http://issues.gradle.org/browse/GRADLE-2625
+        // Workaround for https://issues.gradle.org/browse/GRADLE-2625
         if (getUserHomeDir() != null) {
             args.add(String.format("-Duser.home=%s", getUserHomeDir().getPath()));
         }
@@ -57,17 +56,13 @@ public class DaemonGradleExecuter extends ForkingGradleExecuter {
         if (isNoDefaultJvmArgs()) {
             return super.getGradleOpts();
         } else {
-            // Workaround for http://issues.gradle.org/browse/GRADLE-2629
+            // Workaround for https://issues.gradle.org/browse/GRADLE-2629
             // Instead of just adding these as standalone opts, we need to add to
             // -Dorg.gradle.jvmArgs in order for them to be effectual
             List<String> jvmArgs = new ArrayList<String>(4);
             jvmArgs.add("-XX:MaxPermSize=320m");
             jvmArgs.add("-XX:+HeapDumpOnOutOfMemoryError");
             jvmArgs.add("-XX:HeapDumpPath=" + buildContext.getGradleUserHomeDir().getAbsolutePath());
-            if (JavaVersion.current().isJava5()) {
-                jvmArgs.add("-XX:+CMSPermGenSweepingEnabled");
-                jvmArgs.add("-Dcom.sun.management.jmxremote");
-            }
 
             String quotedArgs = join(" ", collect(jvmArgs, new Transformer<String, String>() {
                 public String transform(String input) {

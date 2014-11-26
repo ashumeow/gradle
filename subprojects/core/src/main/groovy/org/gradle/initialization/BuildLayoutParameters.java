@@ -16,7 +16,7 @@
 
 package org.gradle.initialization;
 
-import org.gradle.StartParameter;
+import org.gradle.api.Nullable;
 import org.gradle.internal.SystemProperties;
 
 import java.io.File;
@@ -24,17 +24,20 @@ import java.io.File;
 import static org.gradle.util.GFileUtils.canonicalise;
 
 public class BuildLayoutParameters {
+    public static final String GRADLE_USER_HOME_PROPERTY_KEY = "gradle.user.home";
+    private static final File DEFAULT_GRADLE_USER_HOME = new File(SystemProperties.getUserHome() + "/.gradle");
 
     private boolean searchUpwards = true;
-    private File projectDir = canonicalise(SystemProperties.getCurrentDir());
+    private File currentDir = canonicalise(SystemProperties.getCurrentDir());
+    private File projectDir;
     private File gradleUserHomeDir;
 
     public BuildLayoutParameters() {
-        String gradleUserHome = System.getProperty(StartParameter.GRADLE_USER_HOME_PROPERTY_KEY);
+        String gradleUserHome = System.getProperty(GRADLE_USER_HOME_PROPERTY_KEY);
         if (gradleUserHome == null) {
             gradleUserHome = System.getenv("GRADLE_USER_HOME");
             if (gradleUserHome == null) {
-                gradleUserHome = StartParameter.DEFAULT_GRADLE_USER_HOME.getAbsolutePath();
+                gradleUserHome = DEFAULT_GRADLE_USER_HOME.getAbsolutePath();
             }
         }
         gradleUserHomeDir = canonicalise(new File(gradleUserHome));
@@ -55,8 +58,22 @@ public class BuildLayoutParameters {
         return this;
     }
 
+    public BuildLayoutParameters setCurrentDir(File currentDir) {
+        this.currentDir = currentDir;
+        return this;
+    }
+
+    public File getCurrentDir() {
+        return currentDir;
+    }
+
+    @Nullable
     public File getProjectDir() {
         return projectDir;
+    }
+
+    public File getSearchDir() {
+        return projectDir != null ? projectDir : currentDir;
     }
 
     public File getGradleUserHomeDir() {

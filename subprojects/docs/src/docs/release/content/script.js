@@ -64,7 +64,8 @@ $(function() {
         if (data.length > 0) {
           var list = $("<ul id='" + idBase + "-list'></ul>").hide().insertAfter(para);
           $.each(data, function (i, issue) {
-            $("<li>[<a href='" + issue["link"] + "'>"+ issue["key"] + "</a>] - " + issue["summary"] + "</li>").appendTo(list);
+            var link = $("<a></a>").attr("href", issue["link"]).text(issue["key"]);
+            $("<li></li>").append(document.createTextNode("["), link, document.createTextNode("] - " + issue["summary"])).appendTo(list);
           });
           list.slideDown("slow");
         }
@@ -83,7 +84,7 @@ $(function() {
   });
 
   injectIssues(
-    "http://services.gradle.org/fixed-issues/@versionBase@", 
+    "https://services.gradle.org/fixed-issues/@versionBase@",
     $("h2#fixed-issues"), 
     "fixed-issues", 
     "Retrieving the fixed issue information for @versionBase@", 
@@ -93,7 +94,7 @@ $(function() {
   );
   
   injectIssues(
-    "http://services.gradle.org/known-issues/@versionBase@", 
+    "https://services.gradle.org/known-issues/@versionBase@",
     $("h2#known-issues").next("p"), 
     "known-issues", 
     "Retrieving the known issue information for @versionBase@", 

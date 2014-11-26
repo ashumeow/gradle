@@ -26,9 +26,8 @@ import org.gradle.initialization.BuildLayoutParameters;
 import org.gradle.initialization.CompositeInitScriptFinder;
 import org.gradle.initialization.DistributionInitScriptFinder;
 import org.gradle.initialization.UserHomeInitScriptFinder;
-import org.gradle.internal.SystemProperties;
+import org.gradle.internal.DefaultTaskExecutionRequest;
 import org.gradle.logging.LoggingConfiguration;
-import org.gradle.util.DeprecationLogger;
 import org.gradle.util.GFileUtils;
 
 import java.io.File;
@@ -39,31 +38,28 @@ import java.util.*;
  * <p>{@code StartParameter} defines the configuration used by a Gradle instance to execute a build. The properties of {@code StartParameter} generally
  * correspond to the command-line options of Gradle.
  *
- * <p>You pass a {@code StartParameter} instance to {@link GradleLauncher#newInstance(StartParameter)} when you create a new Gradle instance.</p>
- *
  * <p>You can obtain an instance of a {@code StartParameter} by either creating a new one, or duplicating an existing one using {@link #newInstance} or {@link #newBuild}.</p>
  *
- * @see GradleLauncher
+ * @see org.gradle.initialization.GradleLauncher
  */
 public class StartParameter extends LoggingConfiguration implements Serializable {
-    public static final String GRADLE_USER_HOME_PROPERTY_KEY = "gradle.user.home";
+    public static final String GRADLE_USER_HOME_PROPERTY_KEY = BuildLayoutParameters.GRADLE_USER_HOME_PROPERTY_KEY;
+
     /**
      * The default user home directory.
      */
-    public static final File DEFAULT_GRADLE_USER_HOME = new File(SystemProperties.getUserHome() + "/.gradle");
+    public static final File DEFAULT_GRADLE_USER_HOME = new BuildLayoutParameters().getGradleUserHomeDir();
 
-    private List<String> taskNames = new ArrayList<String>();
+    private List<TaskExecutionRequest> taskRequests = new ArrayList<TaskExecutionRequest>();
     private Set<String> excludedTaskNames = new LinkedHashSet<String>();
     private boolean buildProjectDependencies = true;
     private File currentDir;
     private File projectDir;
-    private String projectPath;
     private boolean searchUpwards;
     private Map<String, String> projectProperties = new HashMap<String, String>();
     private Map<String, String> systemPropertiesArgs = new HashMap<String, String>();
     private File gradleUserHomeDir;
     private File gradleHomeDir;
-    private CacheUsage cacheUsage = CacheUsage.ON;
     private File settingsFile;
     private boolean useEmptySettings;
     private File buildFile;
@@ -101,10 +97,11 @@ public class StartParameter extends LoggingConfiguration implements Serializable
     public StartParameter() {
         gradleHomeDir = new DefaultModuleRegistry().getGradleHome();
 
-        BuildLayoutParameters layoutDefaults = new BuildLayoutParameters();
-        searchUpwards = layoutDefaults.getSearchUpwards();
-        currentDir = layoutDefaults.getProjectDir();
-        gradleUserHomeDir = layoutDefaults.getGradleUserHomeDir();
+        BuildLayoutParameters layoutParameters = new BuildLayoutParameters();
+        searchUpwards = layoutParameters.getSearchUpwards();
+        currentDir = layoutParameters.getCurrentDir();
+        projectDir = layoutParameters.getProjectDir();
+        gradleUserHomeDir = layoutParameters.getGradleUserHomeDir();
     }
 
     /**
@@ -120,10 +117,9 @@ public class StartParameter extends LoggingConfiguration implements Serializable
         prepareNewBuild(p);
         p.buildFile = buildFile;
         p.projectDir = projectDir;
-        p.projectPath = projectPath;
         p.settingsFile = settingsFile;
         p.useEmptySettings = useEmptySettings;
-        p.taskNames = new ArrayList<String>(taskNames);
+        p.taskRequests = new ArrayList<TaskExecutionRequest>(taskRequests);
         p.excludedTaskNames = new LinkedHashSet<String>(excludedTaskNames);
         p.buildProjectDependencies = buildProjectDependencies;
         p.currentDir = currentDir;
@@ -149,9 +145,8 @@ public class StartParameter extends LoggingConfiguration implements Serializable
 
     protected StartParameter prepareNewBuild(StartParameter p) {
         p.gradleUserHomeDir = gradleUserHomeDir;
-        p.cacheUsage = cacheUsage;
         p.setLogLevel(getLogLevel());
-        p.setColorOutput(isColorOutput());
+        p.setConsoleOutput(getConsoleOutput());
         p.setShowStacktrace(getShowStacktrace());
         p.profile = profile;
         p.continueOnFailure = continueOnFailure;
@@ -213,16 +208,6 @@ public class StartParameter extends LoggingConfiguration implements Serializable
     }
 
     /**
-     * Deprecated. Use {@link #useEmptySettings()}.
-     *
-     * @deprecated use {@link #useEmptySettings()}
-     */
-    @Deprecated
-    public StartParameter useEmptySettingsScript() {
-        return useEmptySettings();
-    }
-
-    /**
      * Returns whether an empty settings script will be used regardless of whether one exists in the default location.
      *
      * @return Whether to use empty settings or not.
@@ -233,10 +218,15 @@ public class StartParameter extends LoggingConfiguration implements Serializable
 
     /**
      * Returns the names of the tasks to execute in this build. When empty, the default tasks for the project will be executed.
+     * If {@link TaskExecutionRequest}s are set for this build then names from these task parameters are returned.
      *
      * @return the names of the tasks to execute in this build. Never returns null.
      */
     public List<String> getTaskNames() {
+        List<String> taskNames = Lists.newArrayList();
+        for (TaskExecutionRequest taskRequest : taskRequests) {
+            taskNames.addAll(taskRequest.getArgs());
+        }
         return taskNames;
     }
 
@@ -247,7 +237,32 @@ public class StartParameter extends LoggingConfiguration implements Serializable
      * @param taskNames the names of the tasks to execute in this build.
      */
     public void setTaskNames(Iterable<String> taskNames) {
-        this.taskNames = Lists.newArrayList(taskNames);
+        if (taskNames == null) {
+            this.taskRequests = Collections.emptyList();
+        } else {
+            this.taskRequests = Arrays.<TaskExecutionRequest>asList(new DefaultTaskExecutionRequest(taskNames));
+        }
+    }
+
+    /**
+     * Returns the tasks to execute in this build. When empty, the default tasks for the project will be executed.
+     *
+     * @return the tasks to execute in this build. Never returns null.
+     */
+    @Incubating
+    public List<TaskExecutionRequest> getTaskRequests() {
+        return taskRequests;
+    }
+
+    /**
+     * <p>Sets the task parameters to execute in this build. Set to an empty list, to execute the default tasks for the project. The tasks are executed in the order provided, subject to dependency
+     * between the tasks.</p>
+     *
+     * @param taskParameters the tasks to execute in this build.
+     */
+    @Incubating
+    public void setTaskRequests(Iterable<? extends TaskExecutionRequest> taskParameters) {
+        this.taskRequests = Lists.newArrayList(taskParameters);
     }
 
     /**
@@ -286,7 +301,7 @@ public class StartParameter extends LoggingConfiguration implements Serializable
         if (currentDir != null) {
             this.currentDir = GFileUtils.canonicalise(currentDir);
         } else {
-            this.currentDir = new BuildLayoutParameters().getProjectDir();
+            this.currentDir = new BuildLayoutParameters().getCurrentDir();
         }
     }
 
@@ -315,24 +330,6 @@ public class StartParameter extends LoggingConfiguration implements Serializable
     }
 
     /**
-     * Deprecated. It is no longer used internally and there's no good reason to keep it.
-     * There is no replacement method.
-     *
-     * Returns a newly constructed map that is the JVM system properties merged with the system property args. <p> System property args take precedence over JVM system properties.
-     *
-     * @return The merged system properties
-     * @deprecated No replacement
-     */
-    @Deprecated
-    public Map<String, String> getMergedSystemProperties() {
-        DeprecationLogger.nagUserOfDiscontinuedMethod("StartParameter.getMergedSystemProperties()");
-        Map<String, String> merged = new HashMap<String, String>();
-        merged.putAll((Map) System.getProperties());
-        merged.putAll(getSystemPropertiesArgs());
-        return merged;
-    }
-
-    /**
      * Returns the directory to use as the user home directory.
      *
      * @return The home directory.
@@ -347,7 +344,7 @@ public class StartParameter extends LoggingConfiguration implements Serializable
      * @param gradleUserHomeDir The home directory. May be null.
      */
     public void setGradleUserHomeDir(File gradleUserHomeDir) {
-        this.gradleUserHomeDir = gradleUserHomeDir == null ? DEFAULT_GRADLE_USER_HOME : GFileUtils.canonicalise(gradleUserHomeDir);
+        this.gradleUserHomeDir = gradleUserHomeDir == null ? new BuildLayoutParameters().getGradleUserHomeDir() : GFileUtils.canonicalise(gradleUserHomeDir);
     }
 
     /**
@@ -367,51 +364,12 @@ public class StartParameter extends LoggingConfiguration implements Serializable
         return this;
     }
 
-    /**
-     *  Returns the configured CacheUsage.
-     *  @deprecated Use {@link #isRecompileScripts} and/or {@link #isRerunTasks} instead.
-      */
-    @Deprecated
-    public CacheUsage getCacheUsage() {
-        return cacheUsage;
-    }
-
-    /**
-     *  Sets the Cache usage.
-     *  @deprecated Use {@link #setRecompileScripts} and/or {@link #setRerunTasks} instead.
-      */
-    @Deprecated
-    public void setCacheUsage(CacheUsage cacheUsage) {
-        this.cacheUsage = cacheUsage;
-    }
-
     public boolean isDryRun() {
         return dryRun;
     }
 
     public void setDryRun(boolean dryRun) {
         this.dryRun = dryRun;
-    }
-
-    /**
-     * Returns task optimization disabled flag.
-     *
-     * @deprecated Use {@link #isRerunTasks} instead.
-      */
-    @Deprecated
-    public boolean isNoOpt() {
-        return rerunTasks;
-    }
-
-   /**
-    * Get task optimization disabled.
-    *
-    * @param noOpt The boolean value for disabling task optimization.
-    * @deprecated Use {@link #setRerunTasks(boolean)} instead.
-    */
-    @Deprecated
-    public void setNoOpt(boolean noOpt) {
-        this.rerunTasks = noOpt;
     }
 
     /**
@@ -513,24 +471,6 @@ public class StartParameter extends LoggingConfiguration implements Serializable
     }
 
     /**
-     * Sets the project path to use to select the default project. Use null to use the default criteria for selecting the default project.
-     *
-     * @param projectPath The project path. May be null.
-     */
-    public void setProjectPath(String projectPath) {
-        this.projectPath = projectPath;
-    }
-
-    /**
-     * Returns the project path to use to select the default project.
-     *
-     * @return The project path. May be null when the project path is not used to select the default project.
-     */
-    public String getProjectPath() {
-        return projectPath;
-    }
-
-    /**
      * Specifies if a profile report should be generated.
      *
      * @param profile true if a profile report should be generated
@@ -572,24 +512,6 @@ public class StartParameter extends LoggingConfiguration implements Serializable
      */
     public void setOffline(boolean offline) {
         this.offline = offline;
-    }
-
-    /**
-     * Supplies the refresh options to use for the build.
-     * @deprecated Use {@link #setRefreshDependencies(boolean)} instead.
-     */
-    @Deprecated
-    public void setRefreshOptions(RefreshOptions refreshOptions) {
-        this.refreshDependencies = refreshOptions.refreshDependencies();
-    }
-
-    /**
-     * Returns the refresh options used for the build.
-     * @deprecated Use {@link #isRefreshDependencies()} instead.
-     */
-    @Deprecated
-    public RefreshOptions getRefreshOptions() {
-        return isRefreshDependencies() ? new RefreshOptions(Arrays.asList(RefreshOptions.Option.DEPENDENCIES)) : RefreshOptions.NONE;
     }
 
     /**
@@ -665,7 +587,7 @@ public class StartParameter extends LoggingConfiguration implements Serializable
     @Override
     public String toString() {
         return "StartParameter{"
-                + "taskNames=" + taskNames
+                + "taskRequests=" + taskRequests
                 + ", excludedTaskNames=" + excludedTaskNames
                 + ", currentDir=" + currentDir
                 + ", searchUpwards=" + searchUpwards
@@ -673,7 +595,6 @@ public class StartParameter extends LoggingConfiguration implements Serializable
                 + ", systemPropertiesArgs=" + systemPropertiesArgs
                 + ", gradleUserHomeDir=" + gradleUserHomeDir
                 + ", gradleHome=" + gradleHomeDir
-                + ", cacheUsage=" + cacheUsage
                 + ", logLevel=" + getLogLevel()
                 + ", showStacktrace=" + getShowStacktrace()
                 + ", buildFile=" + buildFile

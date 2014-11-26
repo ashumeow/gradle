@@ -17,10 +17,8 @@ package org.gradle.execution
 
 import org.gradle.StartParameter
 import org.gradle.api.internal.GradleInternal
-import org.gradle.internal.service.ServiceRegistry
+import org.gradle.api.specs.Spec
 import spock.lang.Specification
-
-import static java.util.Collections.emptySet
 
 class ExcludedTaskFilteringBuildConfigurationActionTest extends Specification {
     final BuildExecutionContext context = Mock()
@@ -28,15 +26,12 @@ class ExcludedTaskFilteringBuildConfigurationActionTest extends Specification {
     final TaskGraphExecuter taskGraph = Mock()
     final TaskSelector selector = Mock()
     final GradleInternal gradle = Mock()
-    final ServiceRegistry services = Mock()
-    final action = new ExcludedTaskFilteringBuildConfigurationAction()
+    final action = new ExcludedTaskFilteringBuildConfigurationAction(selector)
 
     def setup() {
         _ * context.gradle >> gradle
         _ * gradle.startParameter >> startParameter
         _ * gradle.taskGraph >> taskGraph
-        _ * gradle.services >> services
-        _ * services.get(TaskSelector) >> selector
     }
 
     def "calls proceed when there are no excluded tasks defined"() {
@@ -51,6 +46,8 @@ class ExcludedTaskFilteringBuildConfigurationActionTest extends Specification {
     }
 
     def "applies a filter for excluded tasks before proceeding"() {
+        def filter = Stub(Spec)
+
         given:
         _ * startParameter.excludedTaskNames >> ['a']
 
@@ -58,8 +55,8 @@ class ExcludedTaskFilteringBuildConfigurationActionTest extends Specification {
         action.configure(context)
 
         then:
-        1 * selector.getSelection('a') >> new TaskSelector.TaskSelection('a', emptySet())
-        1 * taskGraph.useFilter(!null)
+        1 * selector.getFilter('a') >> filter
+        1 * taskGraph.useFilter({it.specs == [filter]})
         1 * context.proceed()
     }
 }

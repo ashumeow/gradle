@@ -16,8 +16,6 @@
 
 package org.gradle.initialization
 
-import org.gradle.StartParameter
-import org.gradle.api.internal.file.TestFiles
 import org.gradle.internal.SystemProperties
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.junit.Rule
@@ -27,17 +25,18 @@ import static org.gradle.util.GFileUtils.canonicalise
 
 class LayoutCommandLineConverterTest extends Specification {
 
-    def converter = new LayoutCommandLineConverter(TestFiles.fileLookup())
+    def converter = new LayoutCommandLineConverter()
     @Rule TestNameTestDirectoryProvider temp = new TestNameTestDirectoryProvider()
 
     def convert(String... args) {
-        converter.convert(Arrays.asList(args))
+        converter.convert(Arrays.asList(args), new BuildLayoutParameters())
     }
 
     def "has reasonable defaults"() {
         expect:
-        convert().projectDir == canonicalise(SystemProperties.getCurrentDir())
-        convert().gradleUserHomeDir == canonicalise(StartParameter.DEFAULT_GRADLE_USER_HOME)
+        convert().currentDir == canonicalise(SystemProperties.getCurrentDir())
+        convert().projectDir == null
+        convert().gradleUserHomeDir == canonicalise(BuildLayoutParameters.DEFAULT_GRADLE_USER_HOME)
         convert().searchUpwards
     }
 
@@ -51,7 +50,7 @@ class LayoutCommandLineConverterTest extends Specification {
     def "converts relatively to the target dir"() {
         given:
         def root = temp.createDir('root')
-        def target = new BuildLayoutParameters().setProjectDir(root)
+        def target = new BuildLayoutParameters().setCurrentDir(root)
 
         when:
         converter.convert(['-p', 'projectDir', '-g', 'gradleDir'], target)

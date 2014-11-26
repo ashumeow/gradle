@@ -1,19 +1,21 @@
 apply plugin: "cpp"
 
-executables {
-    main {
-        binaries.all {
-            // Define a preprocessor macro
-            cppCompiler.define "NDEBUG"
-            // Add some additional compiler arguments
-            if (toolChain in Gcc) {
-                cppCompiler.args "-fno-access-control", "-fconserve-space"
+model {
+    components {
+        main(NativeExecutableSpec) {
+            binaries.all {
+                // Define a preprocessor macro
+                cppCompiler.define "NDEBUG"
+                // Add some additional compiler arguments
+                if (toolChain in Gcc) {
+                    cppCompiler.args "-fno-access-control", "-fconserve-space"
+                }
             }
         }
     }
 }
 
-binaries.withType(ExecutableBinary) { binary ->
+binaries.withType(NativeExecutableBinary) { binary ->
     def linkTask = binary.tasks.link
     def stripTask = task("strip${binary.name.capitalize()}") {
         dependsOn linkTask

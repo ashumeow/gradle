@@ -10,3 +10,5 @@ Type
 Description
      Builds the JAR
 
+Group
+     build

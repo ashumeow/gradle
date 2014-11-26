@@ -18,7 +18,11 @@ package org.gradle.test.fixtures.plugin
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.Task
 import org.gradle.integtests.fixtures.executer.GradleExecuter
+import org.gradle.model.Mutate
+import org.gradle.model.RuleSource
+import org.gradle.model.collection.CollectionBuilder
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.util.TextUtil
 
@@ -29,10 +33,8 @@ class PluginBuilder {
     String packageName = "org.gradle.test"
 
     final Map<String, String> pluginIds = [:]
-    private final GradleExecuter executer
 
-    PluginBuilder(GradleExecuter executer, TestFile projectDir) {
-        this.executer = executer
+    PluginBuilder(TestFile projectDir) {
         this.projectDir = projectDir
     }
 
@@ -59,7 +61,7 @@ class PluginBuilder {
         file("build.gradle").text = (generateManagedBuildScript() + additions)
     }
 
-    void publishTo(TestFile testFile) {
+    void publishTo(GradleExecuter executer, TestFile testFile) {
         generateBuildScript """
             jar {
                 archiveName = "$testFile.name"
@@ -69,6 +71,11 @@ class PluginBuilder {
 
         writePluginDescriptors(pluginIds)
         executer.inDirectory(projectDir).withTasks("jar").run()
+    }
+
+    void generateForBuildSrc() {
+        generateBuildScript()
+        writePluginDescriptors(pluginIds)
     }
 
     protected void writePluginDescriptors(Map<String, String> pluginIds) {
@@ -82,10 +89,14 @@ class PluginBuilder {
         file("src/main/resources/META-INF/gradle-plugins")
     }
 
-    PluginBuilder addPlugin(String impl, String id = "test-plugin", String className = "TestPlugin") {
+    private addPluginSource(String id, String className, String impl) {
         pluginIds[id] = className
 
-        groovy("${className}.groovy") << """
+        groovy("${className}.groovy") << impl
+    }
+
+    PluginBuilder addPlugin(String impl, String id = "test-plugin", String className = "TestPlugin") {
+        addPluginSource(id, className, """
             package $packageName
 
             class $className implements $Plugin.name<$Project.name> {
@@ -93,12 +104,45 @@ class PluginBuilder {
                     $impl
                 }
             }
-        """
+        """)
+        this
+    }
+
+    PluginBuilder addUnloadablePlugin(String id = "test-plugin", String className = "TestPlugin") {
+        addPluginSource(id, className, """
+            package $packageName
+
+            class $className implements $Plugin.name<$Project.name> {
+                static { throw new Exception("unloadable plugin class") }
+                void apply($Project.name project) {
+                }
+            }
+        """)
         this
     }
 
     PluginBuilder addPluginWithPrintlnTask(String taskName, String message, String id = "test-plugin", String className = "TestPlugin") {
         addPlugin("project.task(\"$taskName\") << { println \"$message\" }", id, className)
+        this
+    }
+
+    PluginBuilder addRuleSource(String pluginId) {
+        String className = "TestRuleSource"
+        addPluginSource(pluginId, className, """
+            package $packageName
+
+            @$RuleSource.name
+            class $className {
+                @$Mutate.name
+                void addTask($CollectionBuilder.name<$Task.name> tasks) {
+                    tasks.create("fromModelRule") {
+                        it.doLast {
+                            println "Model rule provided task executed"
+                        }
+                    }
+                }
+            }
+        """)
         this
     }
 }

@@ -1,37 +1,32 @@
 apply plugin: 'cpp'
 
-sources {
-    exe {}
-    lib {}
-}
 // START SNIPPET flavors
 model {
     flavors {
         english
         french
     }
-}
-
-libraries {
-    hello {
-        binaries.all {
-            if (flavor == flavors.french) {
-                cppCompiler.define "FRENCH"
+    components {
+        hello(NativeLibrarySpec) {
+            binaries.all {
+                if (flavor == flavors.french) {
+                    cppCompiler.define "FRENCH"
+                }
             }
         }
-        source sources.lib
     }
 }
 // END SNIPPET flavors
-binaries.withType(SharedLibraryBinary) {
+binaries.withType(SharedLibraryBinarySpec) {
     cppCompiler.define "DLL_EXPORT"
 }
 
-executables {
-    main {
-        source sources.exe
-        binaries.all {
-            lib libraries.hello
+model {
+    components {
+        main(NativeExecutableSpec) {
+            binaries.all {
+                lib library: 'hello'
+            }
         }
     }
 }

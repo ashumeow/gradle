@@ -15,9 +15,9 @@
  */
 package org.gradle.launcher.daemon.client;
 
-import org.gradle.internal.concurrent.Stoppable;
 import org.gradle.internal.UncheckedException;
 import org.gradle.internal.concurrent.ExecutorFactory;
+import org.gradle.internal.concurrent.Stoppable;
 import org.gradle.internal.concurrent.StoppableExecutor;
 import org.gradle.internal.io.TextStream;
 import org.gradle.util.DisconnectableInputStream;

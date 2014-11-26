@@ -16,10 +16,14 @@
 package org.gradle.tooling.internal.provider;
 
 import org.gradle.initialization.BuildAction;
+import org.gradle.initialization.BuildCancellationToken;
 import org.gradle.internal.Factory;
 import org.gradle.launcher.exec.BuildActionExecuter;
 import org.gradle.logging.LoggingManagerInternal;
-import org.gradle.logging.internal.*;
+import org.gradle.logging.internal.OutputEvent;
+import org.gradle.logging.internal.OutputEventListener;
+import org.gradle.logging.internal.ProgressCompleteEvent;
+import org.gradle.logging.internal.ProgressStartEvent;
 import org.gradle.tooling.internal.protocol.ProgressListenerVersion1;
 import org.gradle.tooling.internal.provider.connection.ProviderOperationParameters;
 
@@ -36,13 +40,18 @@ public class LoggingBridgingBuildActionExecuter implements BuildActionExecuter<P
         this.loggingManagerFactory = loggingManagerFactory;
     }
 
-    public <T> T execute(BuildAction<T> action, ProviderOperationParameters actionParameters) {
+    public <T> T execute(BuildAction<T> action, BuildCancellationToken cancellationToken, ProviderOperationParameters actionParameters) {
         LoggingManagerInternal loggingManager = loggingManagerFactory.create();
-        if (actionParameters.getStandardOutput() != null) {
-            loggingManager.addStandardOutputListener(new StreamBackedStandardOutputListener(actionParameters.getStandardOutput()));
-        }
-        if (actionParameters.getStandardError() != null) {
-            loggingManager.addStandardErrorListener(new StreamBackedStandardOutputListener(actionParameters.getStandardError()));
+        loggingManager.removeAllOutputEventListeners();
+        if (Boolean.TRUE.equals(actionParameters.isColorOutput(null)) && actionParameters.getStandardOutput() != null) {
+            loggingManager.attachAnsiConsole(actionParameters.getStandardOutput());
+        } else {
+            if (actionParameters.getStandardOutput() != null) {
+                loggingManager.addStandardOutputListener(actionParameters.getStandardOutput());
+            }
+            if (actionParameters.getStandardError() != null) {
+                loggingManager.addStandardErrorListener(actionParameters.getStandardError());
+            }
         }
         ProgressListenerVersion1 progressListener = actionParameters.getProgressListener();
         OutputEventListenerAdapter listener = new OutputEventListenerAdapter(progressListener);
@@ -50,8 +59,9 @@ public class LoggingBridgingBuildActionExecuter implements BuildActionExecuter<P
         loggingManager.setLevel(actionParameters.getBuildLogLevel());
         loggingManager.start();
         try {
-            return executer.execute(action, actionParameters);
+            return executer.execute(action, cancellationToken, actionParameters);
         } finally {
+            loggingManager.removeAllOutputEventListeners();
             loggingManager.stop();
         }
     }

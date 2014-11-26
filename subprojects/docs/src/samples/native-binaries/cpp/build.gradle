@@ -3,26 +3,29 @@ apply plugin: 'cpp'
 // END SNIPPET apply-plugin
 
 // START SNIPPET libraries
-libraries {
-    hello {}
+model {
+    components {
+        hello(NativeLibrarySpec)
+    }
 }
 // END SNIPPET libraries
 
 // START SNIPPET executables
-executables {
-    main {}
-}
-// END SNIPPET executables
-
+model {
+    components {
+        main(NativeExecutableSpec) {
 // START SNIPPET source-library
-sources {
-    main {
-        cpp {
-            lib libraries.hello
+            sources {
+                cpp {
+                    lib library: "hello"
+                }
+            }
+// END SNIPPET source-library
         }
     }
 }
-// END SNIPPET source-library
+
+// END SNIPPET executables
 
 // START SNIPPET all-binaries
 binaries.all {
@@ -42,7 +45,7 @@ binaries.all {
 // END SNIPPET all-binaries
 
 // For any shared library binaries built with Visual C++, define the DLL_EXPORT macro
-binaries.withType(SharedLibraryBinary) {
+binaries.withType(SharedLibraryBinarySpec) {
     if (toolChain in VisualCpp) {
         cppCompiler.define "DLL_EXPORT"
     }

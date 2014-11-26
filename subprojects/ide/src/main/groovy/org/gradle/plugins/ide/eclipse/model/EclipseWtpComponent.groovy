@@ -57,10 +57,10 @@ import org.gradle.util.ConfigureUtil
  *       sourceDirs += file('someExtraFolder')
  *
  *       //you can alter the files are to be transformed into dependent-module elements:
- *       plusConfigurations += configurations.someInterestingConfiguration
+ *       plusConfigurations += [ configurations.someInterestingConfiguration ]
  *
  *       //or whose files are to be excluded from dependent-module elements:
- *       minusConfigurations += configurations.anotherConfiguration
+ *       minusConfigurations << configurations.anotherConfiguration
  *
  *       //you can add a wb-resource elements; mandatory keys: 'sourcePath', 'deployPath':
  *       //if sourcePath points to non-existing folder it will *not* be added.

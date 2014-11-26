@@ -29,6 +29,7 @@ import org.gradle.tooling.model.GradleProject
 import org.gradle.tooling.model.build.BuildEnvironment
 import org.gradle.tooling.model.eclipse.EclipseProject
 import org.gradle.tooling.model.eclipse.HierarchicalEclipseProject
+import org.gradle.tooling.model.gradle.BuildInvocations
 import org.gradle.tooling.model.gradle.GradleBuild
 import org.gradle.tooling.model.idea.BasicIdeaProject
 import org.gradle.tooling.model.idea.IdeaProject
@@ -52,7 +53,8 @@ class BuildActionRunnerBackedConsumerConnectionTest extends Specification {
         def details = connection.versionDetails
 
         expect:
-        details.supportsGradleProjectModel()
+        !details.supportsTaskDisplayName()
+        !details.supportsCancellation()
 
         and:
         details.maySupportModel(HierarchicalEclipseProject)
@@ -65,6 +67,8 @@ class BuildActionRunnerBackedConsumerConnectionTest extends Specification {
         details.maySupportModel(Void)
 
         and:
+        !details.maySupportModel(GradleBuild)
+        !details.maySupportModel(BuildInvocations)
         !details.maySupportModel(CustomModel)
     }
 

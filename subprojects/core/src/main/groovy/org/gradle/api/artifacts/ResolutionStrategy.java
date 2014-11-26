@@ -219,4 +219,23 @@ public interface ResolutionStrategy {
      * @since 1.0-milestone-6
      */
     void cacheChangingModulesFor(int value, TimeUnit units);
+
+    /**
+     * Returns the currently configured version selection rules object.
+     *
+     * @return the version selection rules
+     * @since 2.2
+     */
+    @Incubating
+    ComponentSelectionRules getComponentSelection();
+
+    /**
+     * The componentSelection block provides rules to filter or blacklist certain components from appearing in the resolution result.
+     *
+     * @param action Action to be applied to the {@link ComponentSelectionRules}
+     * @return this ResolutionStrategy instance
+     * @since 2.2
+     */
+    @Incubating
+    ResolutionStrategy componentSelection(Action<? super ComponentSelectionRules> action);
 }

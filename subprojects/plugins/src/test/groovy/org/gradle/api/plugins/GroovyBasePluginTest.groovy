@@ -16,8 +16,7 @@
  
 package org.gradle.api.plugins
 
-import org.gradle.api.Project
-import org.gradle.api.internal.artifacts.configurations.Configurations
+import org.gradle.api.internal.project.DefaultProject
 import org.gradle.api.reporting.ReportingExtension
 import org.gradle.api.tasks.compile.GroovyCompile
 import org.gradle.api.tasks.javadoc.Groovydoc
@@ -27,29 +26,20 @@ import org.junit.Test
 
 import static org.gradle.api.tasks.TaskDependencyMatchers.dependsOn
 import static org.gradle.util.WrapUtil.toLinkedSet
-import static org.gradle.util.WrapUtil.toSet
 import static org.hamcrest.Matchers.*
-import static org.junit.Assert.*
-
+import static org.junit.Assert.assertThat
+import static org.junit.Assert.assertTrue
 
 class GroovyBasePluginTest {
-    private final Project project = TestUtil.createRootProject()
+    private final DefaultProject project = TestUtil.createRootProject()
 
     @Before
     void before() {
-        project.plugins.apply(GroovyBasePlugin)
+        project.pluginManager.apply(GroovyBasePlugin)
     }
 
     @Test void appliesTheJavaBasePluginToTheProject() {
         assertTrue(project.getPlugins().hasPlugin(JavaBasePlugin));
-    }
-
-    @Test void addsGroovyConfigurationToTheProject() {
-        def configuration = project.configurations.findByName('groovy')
-        assertNotNull(configuration)
-        assertThat(Configurations.getNames(configuration.extendsFrom, false), equalTo(toSet()))
-        assertFalse(configuration.visible)
-        assertTrue(configuration.transitive)
     }
 
     @Test void appliesMappingsToNewSourceSet() {

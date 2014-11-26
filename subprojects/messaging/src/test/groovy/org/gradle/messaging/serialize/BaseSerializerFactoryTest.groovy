@@ -16,9 +16,7 @@
 
 package org.gradle.messaging.serialize
 
-import spock.lang.Specification
-
-class BaseSerializerFactoryTest extends Specification {
+class BaseSerializerFactoryTest extends SerializerSpec {
     def factory = new BaseSerializerFactory()
 
     def "uses efficient serialization for Strings"() {
@@ -28,11 +26,13 @@ class BaseSerializerFactoryTest extends Specification {
         when:
         def serializer = factory.getSerializerFor(String)
         serializer.write(encoder, "hi")
-        serializer.read(decoder)
+        def result = serializer.read(decoder)
 
         then:
+        result == "bye"
         1 * encoder.writeString("hi")
         1 * decoder.readString() >> "bye"
+        0 * _
     }
 
     def "uses efficient serialization for Files"() {
@@ -48,6 +48,7 @@ class BaseSerializerFactoryTest extends Specification {
         result == new File("some-file")
         1 * encoder.writeString("some-file")
         1 * decoder.readString() >> "some-file"
+        0 * _
     }
 
     def "uses efficient serialization for Long"() {
@@ -57,11 +58,56 @@ class BaseSerializerFactoryTest extends Specification {
         when:
         def serializer = factory.getSerializerFor(Long)
         serializer.write(encoder, 123L)
-        serializer.read(decoder)
+        def result = serializer.read(decoder)
 
         then:
+        result == 456L
         1 * encoder.writeLong(123L)
         1 * decoder.readLong() >> 456L
+        0 * _
+    }
+
+    enum Letters {
+        A, B, C
+    }
+
+    def "uses efficient serialization for Enum"() {
+        def encoder = Mock(Encoder)
+        def decoder = Mock(Decoder)
+
+        when:
+        def serializer = factory.getSerializerFor(Letters)
+        serializer.write(encoder, Letters.B)
+        def result = serializer.read(decoder)
+
+        then:
+        result == Letters.C
+        1 * encoder.writeSmallInt(1)
+        1 * decoder.readSmallInt() >> 2
+        0 * _
+    }
+
+    def "uses efficient serialization for byte arrays"() {
+        def s = factory.getSerializerFor(byte[])
+        def os = new ByteArrayOutputStream()
+        s.write(new OutputStreamBackedEncoder(os), new byte[5])
+
+        expect:
+        def result = serialize(new byte[5], s)
+        result instanceof byte[]
+        result.length == 5
+    }
+
+    def "can serialize string maps"() {
+        def s = BaseSerializerFactory.NO_NULL_STRING_MAP_SERIALIZER
+
+        expect:
+        serialize(map, s) == map
+
+        where:
+        map << [
+                [:], ["foo": "bar"], [a: "a", "b": "b"]
+        ]
     }
 
     def "uses Java serialization for unknown type"() {
@@ -69,5 +115,5 @@ class BaseSerializerFactoryTest extends Specification {
         factory.getSerializerFor(Thing) instanceof DefaultSerializer
     }
 
-    class Thing { }
+    class Thing {}
 }

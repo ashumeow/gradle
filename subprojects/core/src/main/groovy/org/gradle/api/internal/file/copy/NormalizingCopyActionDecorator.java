@@ -24,7 +24,7 @@ import org.gradle.api.file.RelativePath;
 import org.gradle.api.internal.file.AbstractFileTreeElement;
 import org.gradle.api.internal.file.CopyActionProcessingStreamAction;
 import org.gradle.api.tasks.WorkResult;
-import org.gradle.internal.nativeplatform.filesystem.Chmod;
+import org.gradle.internal.nativeintegration.filesystem.Chmod;
 
 import java.io.File;
 import java.io.FilterReader;
@@ -171,6 +171,18 @@ public class NormalizingCopyActionDecorator implements CopyAction {
         }
 
         public DuplicatesStrategy getDuplicatesStrategy() {
+            throw new UnsupportedOperationException();
+        }
+
+        public String getSourceName() {
+            throw new UnsupportedOperationException();
+        }
+
+        public String getSourcePath() {
+            throw new UnsupportedOperationException();
+        }
+
+        public RelativePath getRelativeSourcePath() {
             throw new UnsupportedOperationException();
         }
 

@@ -30,26 +30,28 @@ import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.compile.AbstractCompile;
 import org.gradle.api.tasks.compile.JavaCompile;
 import org.gradle.api.tasks.javadoc.Javadoc;
-import org.gradle.api.tasks.testing.*;
+import org.gradle.api.tasks.testing.Test;
 import org.gradle.internal.reflect.Instantiator;
-import org.gradle.language.base.BinaryContainer;
+import org.gradle.jvm.ClassDirectoryBinarySpec;
+import org.gradle.jvm.Classpath;
 import org.gradle.language.base.FunctionalSourceSet;
 import org.gradle.language.base.ProjectSourceSet;
+import org.gradle.language.base.internal.DefaultFunctionalSourceSet;
 import org.gradle.language.java.internal.DefaultJavaSourceSet;
-import org.gradle.language.jvm.ClassDirectoryBinary;
-import org.gradle.language.jvm.Classpath;
-import org.gradle.language.jvm.ResourceSet;
-import org.gradle.language.jvm.internal.DefaultResourceSet;
+import org.gradle.language.jvm.JvmResourceSet;
+import org.gradle.language.jvm.internal.DefaultJvmResourceSet;
+import org.gradle.platform.base.BinaryContainer;
 import org.gradle.util.WrapUtil;
 
 import javax.inject.Inject;
 import java.io.File;
+import java.util.Collections;
 import java.util.concurrent.Callable;
 
 /**
  * <p>A {@link org.gradle.api.Plugin} which compiles and tests Java source, and assembles it into a JAR file.</p>
  */
-public class JavaBasePlugin implements Plugin<Project> {
+public class JavaBasePlugin implements Plugin<ProjectInternal> {
     public static final String CHECK_TASK_NAME = "check";
     public static final String BUILD_TASK_NAME = "build";
     public static final String BUILD_DEPENDENTS_TASK_NAME = "buildDependents";
@@ -64,12 +66,12 @@ public class JavaBasePlugin implements Plugin<Project> {
         this.instantiator = instantiator;
     }
 
-    public void apply(Project project) {
-        project.getPlugins().apply(BasePlugin.class);
-        project.getPlugins().apply(ReportingBasePlugin.class);
-        project.getPlugins().apply(JavaLanguagePlugin.class);
+    public void apply(ProjectInternal project) {
+        project.apply(Collections.singletonMap("plugin", BasePlugin.class));
+        project.apply(Collections.singletonMap("plugin", ReportingBasePlugin.class));
+        project.apply(Collections.singletonMap("plugin", LegacyJavaComponentPlugin.class));
 
-        JavaPluginConvention javaConvention = new JavaPluginConvention((ProjectInternal) project, instantiator);
+        JavaPluginConvention javaConvention = new JavaPluginConvention(project, instantiator);
         project.getConvention().getPlugins().put("java", javaConvention);
 
         configureCompileDefaults(project, javaConvention);
@@ -128,15 +130,15 @@ public class JavaBasePlugin implements Plugin<Project> {
                 sourceSet.getResources().srcDir(String.format("src/%s/resources", sourceSet.getName()));
                 sourceSet.compiledBy(sourceSet.getClassesTaskName());
 
-                FunctionalSourceSet functionalSourceSet = projectSourceSet.create(sourceSet.getName());
+                FunctionalSourceSet functionalSourceSet = instantiator.newInstance(DefaultFunctionalSourceSet.class, sourceSet.getName(), instantiator, projectSourceSet);
                 Classpath compileClasspath = new SourceSetCompileClasspath(sourceSet);
-                DefaultJavaSourceSet javaSourceSet = instantiator.newInstance(DefaultJavaSourceSet.class, "java", sourceSet.getJava(), compileClasspath, functionalSourceSet);
+                DefaultJavaSourceSet javaSourceSet = instantiator.newInstance(DefaultJavaSourceSet.class, "java", sourceSet.getName(), sourceSet.getJava(), compileClasspath);
                 functionalSourceSet.add(javaSourceSet);
-                ResourceSet resourceSet = instantiator.newInstance(DefaultResourceSet.class, "resources", sourceSet.getResources(), functionalSourceSet);
+                JvmResourceSet resourceSet = instantiator.newInstance(DefaultJvmResourceSet.class, "resources", sourceSet.getName(), sourceSet.getResources());
                 functionalSourceSet.add(resourceSet);
 
                 BinaryContainer binaryContainer = project.getExtensions().getByType(BinaryContainer.class);
-                ClassDirectoryBinary binary = binaryContainer.create(String.format("%sClasses", sourceSet.getName()), ClassDirectoryBinary.class);
+                ClassDirectoryBinarySpec binary = binaryContainer.create(String.format("%sClasses", sourceSet.getName()), ClassDirectoryBinarySpec.class);
                 ConventionMapping conventionMapping = new DslObject(binary).getConventionMapping();
                 conventionMapping.map("classesDir", new Callable<File>() {
                     public File call() throws Exception {

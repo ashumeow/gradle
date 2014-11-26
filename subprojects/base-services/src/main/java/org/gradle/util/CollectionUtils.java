@@ -15,9 +15,13 @@
  */
 package org.gradle.util;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableListMultimap;
 import org.gradle.api.Action;
+import org.gradle.api.Nullable;
 import org.gradle.api.Transformer;
 import org.gradle.api.specs.Spec;
+import org.gradle.internal.Factory;
 import org.gradle.internal.Transformers;
 
 import java.lang.reflect.Array;
@@ -62,6 +66,11 @@ public abstract class CollectionUtils {
     public static <T> List<T> filter(List<? extends T> list, Spec<? super T> filter) {
         return filter(list, new LinkedList<T>(), filter);
     }
+
+    public static <T> List<T> filter(T[] array, Spec<? super T> filter) {
+        return filter(Arrays.asList(array), new LinkedList<T>(), filter);
+    }
+
 
     /**
      * Returns a sorted copy of the provided collection of things. Uses the provided comparator to sort.
@@ -186,7 +195,7 @@ public abstract class CollectionUtils {
                 Object[] thingArray = (Object[]) thing;
                 List<T> list = new ArrayList<T>(thingArray.length);
                 for (Object thingThing : thingArray) {
-                    list.addAll(flattenCollections((Class) type, thingThing));
+                    list.addAll(flattenCollections(type, thingThing));
                 }
                 return list;
             }
@@ -195,7 +204,7 @@ public abstract class CollectionUtils {
                 Collection<?> collection = (Collection<?>) thing;
                 List<T> list = new ArrayList<T>();
                 for (Object element : collection) {
-                    list.addAll(flattenCollections((Class) type, element));
+                    list.addAll(flattenCollections(type, element));
                 }
                 return list;
             }
@@ -204,26 +213,24 @@ public abstract class CollectionUtils {
         } else {
             List<T> list = new ArrayList<T>();
             for (Object thing : things) {
-                list.addAll(flattenCollections((Class) type, thing));
+                list.addAll(flattenCollections(type, thing));
             }
             return list;
         }
     }
 
     public static <T> List<T> toList(Iterable<? extends T> things) {
-        if (things == null) {
-            return new ArrayList<T>(0);
-        }
         if (things instanceof List) {
             @SuppressWarnings("unchecked") List<T> castThings = (List<T>) things;
             return castThings;
         }
-        if (things instanceof Collection) {
-            return new ArrayList<T>((Collection) things);
-        }
-        List<T> list = new ArrayList<T>();
-        for (T thing : things) {
-            list.add(thing);
+        return toMutableList(things);
+    }
+
+    public static <T> List<T> toList(Enumeration<? extends T> things) {
+        AbstractList<T> list = new ArrayList<T>();
+        while (things.hasMoreElements()) {
+            list.add(things.nextElement());
         }
         return list;
     }
@@ -261,9 +268,7 @@ public abstract class CollectionUtils {
         }
 
         List<T> list = new ArrayList<T>(things.length);
-        for (T thing : things) {
-            list.add(thing);
-        }
+        Collections.addAll(list, things);
         return list;
     }
 
@@ -310,7 +315,7 @@ public abstract class CollectionUtils {
         return collect(source, destination, Transformers.asString());
     }
 
-    public static List<String> stringize(List<?> source) {
+    public static List<String> stringize(Collection<?> source) {
         return stringize(source, new ArrayList<String>(source.size()));
     }
 
@@ -373,9 +378,7 @@ public abstract class CollectionUtils {
      * @return t1
      */
     public static <T> Collection<T> addAll(Collection<T> t1, T... t2) {
-        for (T t : t2) {
-            t1.add(t);
-        }
+        Collections.addAll(t1, t2);
         return t1;
     }
 
@@ -530,6 +533,45 @@ public abstract class CollectionUtils {
             action.execute(new InjectionStep<T, I>(target, item));
         }
         return target;
+    }
+
+    public static <K, V> ImmutableListMultimap<K, V> groupBy(Iterable<? extends V> iterable, Transformer<? extends K, V> grouper) {
+        ImmutableListMultimap.Builder<K, V> builder = ImmutableListMultimap.builder();
+
+        for (V element : iterable) {
+            K key = grouper.transform(element);
+            builder.put(key, element);
+        }
+
+        return builder.build();
+    }
+
+    public static <T> Iterable<? extends T> unpack(final Iterable<? extends Factory<? extends T>> factories) {
+        return new Iterable<T>() {
+            private final Iterator<? extends Factory<? extends T>> delegate = factories.iterator();
+
+            public Iterator<T> iterator() {
+                return new Iterator<T>() {
+                    public boolean hasNext() {
+                        return delegate.hasNext();
+                    }
+
+                    public T next() {
+                        return delegate.next().create();
+                    }
+
+                    public void remove() {
+                        throw new UnsupportedOperationException();
+                    }
+                };
+            }
+        };
+    }
+
+    @Nullable
+    public static <T> List<T> nonEmptyOrNull(Iterable<T> iterable) {
+        ImmutableList<T> list = ImmutableList.copyOf(iterable);
+        return list.isEmpty() ? null : list;
     }
 
 }

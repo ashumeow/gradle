@@ -18,10 +18,7 @@ package org.gradle.api.publish.maven.internal.publication
 import org.gradle.api.Action
 import org.gradle.api.InvalidUserDataException
 import org.gradle.api.Task
-import org.gradle.api.artifacts.DependencyArtifact
-import org.gradle.api.artifacts.ModuleDependency
-import org.gradle.api.artifacts.ProjectDependency
-import org.gradle.api.artifacts.PublishArtifact
+import org.gradle.api.artifacts.*
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
 import org.gradle.api.internal.component.SoftwareComponentInternal
 import org.gradle.api.internal.component.Usage
@@ -116,6 +113,42 @@ public class DefaultMavenPublicationTest extends Specification {
         publication.pom.packaging == "ext"
     }
 
+    def "packaging determines main artifact"() {
+        when:
+        def mavenArtifact = Mock(MavenArtifact)
+        notationParser.parseNotation("artifact") >> mavenArtifact
+        mavenArtifact.extension >> "ext"
+        def attachedMavenArtifact = Mock(MavenArtifact)
+        notationParser.parseNotation("attached") >> attachedMavenArtifact
+        attachedMavenArtifact.extension >> "jar"
+
+        and:
+        def publication = createPublication()
+        publication.artifact("artifact")
+        publication.artifact("attached")
+        publication.pom.packaging = "ext"
+
+        then:
+        publication.asNormalisedPublication().mainArtifact.extension == "ext"
+        publication.pom.packaging == "ext"
+    }
+
+    def 'if there is only one artifact it is the main artifact even if packaging is different'() {
+        when:
+        def mavenArtifact = Mock(MavenArtifact)
+        notationParser.parseNotation("artifact") >> mavenArtifact
+        mavenArtifact.extension >> "ext"
+
+        and:
+        def publication = createPublication()
+        publication.artifact("artifact")
+        publication.pom.packaging = "otherext"
+
+        then:
+        publication.asNormalisedPublication().mainArtifact.extension == "ext"
+        publication.pom.packaging == "otherext"
+    }
+
     def "empty publishableFiles and artifacts when no component is added"() {
         when:
         def publication = createPublication()
@@ -160,12 +193,14 @@ public class DefaultMavenPublicationTest extends Specification {
         def publication = createPublication()
         def moduleDependency = Mock(ModuleDependency)
         def artifact = Mock(DependencyArtifact)
+        def excludeRule = Mock(ExcludeRule)
 
         when:
         moduleDependency.group >> "group"
         moduleDependency.name >> "name"
         moduleDependency.version >> "version"
         moduleDependency.artifacts >> [artifact]
+        moduleDependency.excludeRules >> [excludeRule]
 
         and:
         publication.from(componentWithDependency(moduleDependency))
@@ -177,6 +212,7 @@ public class DefaultMavenPublicationTest extends Specification {
             artifactId == "name"
             version == "version"
             artifacts == [artifact]
+            excludeRules == [excludeRule]
         }
     }
 

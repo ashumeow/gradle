@@ -15,12 +15,10 @@
  */
 package org.gradle.api.internal.file;
 
-import groovy.lang.Closure;
 import org.gradle.api.Action;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.PathValidation;
 import org.gradle.api.file.*;
-import org.gradle.api.internal.ClosureBackedAction;
 import org.gradle.api.internal.ProcessOperations;
 import org.gradle.api.internal.file.archive.TarFileTree;
 import org.gradle.api.internal.file.archive.ZipFileTree;
@@ -34,19 +32,17 @@ import org.gradle.api.internal.resources.DefaultResourceHandler;
 import org.gradle.api.internal.tasks.TaskResolver;
 import org.gradle.api.resources.ReadableResource;
 import org.gradle.api.tasks.WorkResult;
-import org.gradle.internal.nativeplatform.filesystem.FileSystem;
+import org.gradle.internal.nativeintegration.filesystem.FileSystem;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.process.ExecResult;
+import org.gradle.process.ExecSpec;
+import org.gradle.process.JavaExecSpec;
 import org.gradle.process.internal.*;
-import org.gradle.util.ConfigureUtil;
 import org.gradle.util.GFileUtils;
 
 import java.io.File;
 import java.net.URI;
-import java.util.Collections;
 import java.util.Map;
-
-import static org.gradle.util.ConfigureUtil.configure;
 
 public class DefaultFileOperations implements FileOperations, ProcessOperations, ExecActionFactory {
     private final FileResolver fileResolver;
@@ -64,7 +60,7 @@ public class DefaultFileOperations implements FileOperations, ProcessOperations,
         this.temporaryFileProvider = temporaryFileProvider;
         this.instantiator = instantiator;
         this.deleteAction = new DeleteActionImpl(fileResolver);
-        this.resourceHandler = new DefaultResourceHandler(fileResolver);
+        this.resourceHandler = new DefaultResourceHandler(this, temporaryFileProvider);
         fileCopier = new FileCopier(this.instantiator, this.fileResolver, fileLookup);
         fileSystem = fileLookup.getFileSystem();
     }
@@ -80,31 +76,17 @@ public class DefaultFileOperations implements FileOperations, ProcessOperations,
     public URI uri(Object path) {
         return fileResolver.resolveUri(path);
     }
-    
+
     public ConfigurableFileCollection files(Object... paths) {
         return new DefaultConfigurableFileCollection(fileResolver, taskResolver, paths);
-    }
-
-    public ConfigurableFileCollection files(Object paths, Closure configureClosure) {
-        return configure(configureClosure, files(paths));
     }
 
     public ConfigurableFileTree fileTree(Object baseDir) {
         return new DefaultConfigurableFileTree(baseDir, fileResolver, taskResolver, fileCopier);
     }
 
-    public ConfigurableFileTree fileTree(Object baseDir, Closure closure) {
-        return ConfigureUtil.configure(closure, fileTree(baseDir));
-    }
-
     public ConfigurableFileTree fileTree(Map<String, ?> args) {
         return new DefaultConfigurableFileTree(args, fileResolver, taskResolver, fileCopier);
-    }
-
-    @Deprecated
-    public ConfigurableFileTree fileTree(Closure closure) {
-        // This method is deprecated, but the deprecation warning is added on public classes that delegate to this. 
-        return configure(closure, new DefaultConfigurableFileTree(Collections.emptyMap(), fileResolver, taskResolver, fileCopier));
     }
 
     public FileTree zipTree(Object zipPath) {
@@ -139,16 +121,12 @@ public class DefaultFileOperations implements FileOperations, ProcessOperations,
         return deleteAction.delete(paths);
     }
 
-    public WorkResult copy(Closure closure) {
-        return fileCopier.copy(new ClosureBackedAction<CopySpec>(closure));
+    public WorkResult copy(Action<? super CopySpec> action) {
+        return fileCopier.copy(action);
     }
 
     public WorkResult sync(Action<? super CopySpec> action) {
         return fileCopier.sync(action);
-    }
-
-    public CopySpec copySpec(Closure closure) {
-        return copySpec(new ClosureBackedAction<CopySpec>(closure));
     }
 
     public CopySpec copySpec(Action<? super CopySpec> action) {
@@ -161,13 +139,15 @@ public class DefaultFileOperations implements FileOperations, ProcessOperations,
         return fileResolver;
     }
 
-    public ExecResult javaexec(Closure cl) {
-        JavaExecAction javaExecAction = ConfigureUtil.configure(cl, instantiator.newInstance(DefaultJavaExecAction.class, fileResolver));
+    public ExecResult javaexec(Action<? super JavaExecSpec> action) {
+        JavaExecAction javaExecAction = instantiator.newInstance(DefaultJavaExecAction.class, fileResolver);
+        action.execute(javaExecAction);
         return javaExecAction.execute();
     }
 
-    public ExecResult exec(Closure cl) {
-        ExecAction execAction = ConfigureUtil.configure(cl, instantiator.newInstance(DefaultExecAction.class, fileResolver));
+    public ExecResult exec(Action<? super ExecSpec> action) {
+        ExecAction execAction = instantiator.newInstance(DefaultExecAction.class, fileResolver);
+        action.execute(execAction);
         return execAction.execute();
     }
 

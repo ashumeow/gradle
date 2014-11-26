@@ -16,7 +16,6 @@
 
 package org.gradle.performance
 
-import org.gradle.performance.fixture.AbstractPerformanceTest
 import spock.lang.Unroll
 
 import static org.gradle.performance.measure.Duration.millis
@@ -39,9 +38,9 @@ class ConfigurationPerformanceTest extends AbstractPerformanceTest {
 
         where:
         testProject       | maxExecutionTimeRegression
-        "small"           | millis(1000)
+        "small"           | millis(1200)
         "multi"           | millis(1200)
-        "lotDependencies" | millis(800)
+        "lotDependencies" | millis(1000)
         "manyProjects"    | millis(1500)
     }
 }

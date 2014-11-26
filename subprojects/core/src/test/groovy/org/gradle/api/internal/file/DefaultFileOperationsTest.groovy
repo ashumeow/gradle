@@ -22,6 +22,8 @@ import org.gradle.api.InvalidUserDataException
 import org.gradle.api.PathValidation
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.FileTree
+import org.gradle.api.internal.AsmBackedClassGenerator
+import org.gradle.api.internal.ClassGeneratorBackedInstantiator
 import org.gradle.api.internal.file.archive.TarFileTree
 import org.gradle.api.internal.file.archive.ZipFileTree
 import org.gradle.api.internal.file.collections.DefaultConfigurableFileCollection
@@ -39,16 +41,20 @@ import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
 import org.junit.Rule
-import org.junit.Test
 import spock.lang.Specification
 
 public class DefaultFileOperationsTest extends Specification {
     private final FileResolver resolver = Mock()
     private final TaskResolver taskResolver = Mock()
     private final TemporaryFileProvider temporaryFileProvider = Mock()
-    private final Instantiator instantiator = new DirectInstantiator()
+    private final Instantiator instantiator = new ClassGeneratorBackedInstantiator(new AsmBackedClassGenerator(), new DirectInstantiator())
     private final FileLookup fileLookup = Mock()
-    private DefaultFileOperations fileOperations = new DefaultFileOperations(resolver, taskResolver, temporaryFileProvider, instantiator, fileLookup)
+    private DefaultFileOperations fileOperations = instance()
+
+    private DefaultFileOperations instance(FileResolver resolver = resolver) {
+        instantiator.newInstance(DefaultFileOperations, resolver, taskResolver, temporaryFileProvider, instantiator, fileLookup)
+    }
+
     @Rule
     public final TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider()
 
@@ -99,40 +105,11 @@ public class DefaultFileOperationsTest extends Specification {
         fileTree.resolver.is(resolver)
     }
 
-    def createsAndConfiguresFileTree() {
-        given:
-        TestFile baseDir = expectPathResolved('base')
-        
-        when:
-        def fileTree = fileOperations.fileTree('base') {
-            builtBy 1
-        }
-        
-        then:
-        fileTree instanceof FileTree
-        fileTree.dir == baseDir
-        fileTree.resolver.is(resolver)
-        fileTree.builtBy == [1] as Set
-    }
-    
     def createsFileTreeFromMap() {
         TestFile baseDir = expectPathResolved('base')
 
         when:
         def fileTree = fileOperations.fileTree(dir: 'base')
-
-        then:
-        fileTree instanceof FileTree
-        fileTree.dir == baseDir
-        fileTree.resolver.is(resolver)
-    }
-
-    @Test
-    public void createsFileTreeFromClosure() {
-        TestFile baseDir = expectPathResolved('base')
-
-        when:
-        def fileTree = fileOperations.fileTree { from 'base' }
 
         then:
         fileTree instanceof FileTree
@@ -244,7 +221,7 @@ public class DefaultFileOperationsTest extends Specification {
 
     def javaexec() {
         File testFile = tmpDir.file("someFile")
-        fileOperations = new DefaultFileOperations(resolver(), taskResolver, temporaryFileProvider, instantiator, fileLookup)
+        fileOperations = instance(resolver())
         List files = ClasspathUtil.getClasspath(getClass().classLoader)
 
         when:
@@ -260,7 +237,7 @@ public class DefaultFileOperationsTest extends Specification {
     }
 
     def javaexecWithNonZeroExitValueShouldThrowException() {
-        fileOperations = new DefaultFileOperations(resolver(), taskResolver, temporaryFileProvider, instantiator, fileLookup)
+        fileOperations = instance(resolver())
 
         when:
         fileOperations.javaexec {
@@ -272,7 +249,7 @@ public class DefaultFileOperationsTest extends Specification {
     }
 
     def javaexecWithNonZeroExitValueAndIgnoreExitValueShouldNotThrowException() {
-        fileOperations = new DefaultFileOperations(resolver(), taskResolver, temporaryFileProvider, instantiator, fileLookup)
+        fileOperations = instance(resolver())
 
         when:
         ExecResult result = fileOperations.javaexec {
@@ -286,7 +263,7 @@ public class DefaultFileOperationsTest extends Specification {
 
     @Requires(TestPrecondition.NOT_WINDOWS)
     def exec() {
-        fileOperations = new DefaultFileOperations(resolver(), taskResolver, temporaryFileProvider, instantiator, fileLookup)
+        fileOperations = instance(resolver())
         File testFile = tmpDir.file("someFile")
 
         when:
@@ -303,7 +280,7 @@ public class DefaultFileOperationsTest extends Specification {
 
     @Requires(TestPrecondition.NOT_WINDOWS)
     def execWithNonZeroExitValueShouldThrowException() {
-        fileOperations = new DefaultFileOperations(resolver(), taskResolver, temporaryFileProvider, instantiator, fileLookup)
+        fileOperations = instance(resolver())
 
         when:
         fileOperations.exec {
@@ -318,7 +295,7 @@ public class DefaultFileOperationsTest extends Specification {
 
     @Requires(TestPrecondition.NOT_WINDOWS)
     def execWithNonZeroExitValueAndIgnoreExitValueShouldNotThrowException() {
-        fileOperations = new DefaultFileOperations(resolver(), taskResolver, temporaryFileProvider, instantiator, fileLookup)
+        fileOperations = instance(resolver())
 
         when:
         ExecResult result = fileOperations.exec {

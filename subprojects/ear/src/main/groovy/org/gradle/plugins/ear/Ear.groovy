@@ -16,18 +16,21 @@
 
 package org.gradle.plugins.ear
 
+import org.gradle.api.Action
 import org.gradle.api.file.CopySpec
 import org.gradle.api.file.FileCopyDetails
 import org.gradle.api.internal.file.collections.FileTreeAdapter
 import org.gradle.api.internal.file.collections.MapFileTree
 import org.gradle.api.tasks.bundling.Jar
-import org.gradle.internal.nativeplatform.filesystem.Chmod
+import org.gradle.internal.reflect.Instantiator
 import org.gradle.plugins.ear.descriptor.DeploymentDescriptor
 import org.gradle.plugins.ear.descriptor.EarModule
 import org.gradle.plugins.ear.descriptor.internal.DefaultDeploymentDescriptor
 import org.gradle.plugins.ear.descriptor.internal.DefaultEarModule
 import org.gradle.plugins.ear.descriptor.internal.DefaultEarWebModule
 import org.gradle.util.ConfigureUtil
+
+import javax.inject.Inject
 
 /**
  * Assembles an EAR archive.
@@ -74,19 +77,26 @@ class Ear extends Jar {
         // this allows us to generate the deployment descriptor after recording all modules it contains
         def metaInf = mainSpec.addChild().into('META-INF')
         metaInf.addChild().from {
-            MapFileTree descriptorSource = new MapFileTree(temporaryDirFactory, services.get(Chmod))
+            MapFileTree descriptorSource = new MapFileTree(temporaryDirFactory, fileSystem)
             final DeploymentDescriptor descriptor = deploymentDescriptor
             if (descriptor) {
                 if (!descriptor.libraryDirectory) {
                     descriptor.libraryDirectory = libDirName
                 }
-                descriptorSource.add(descriptor.fileName) {OutputStream outstr ->
-                    descriptor.writeTo(new OutputStreamWriter(outstr))
-                }
+                descriptorSource.add(descriptor.fileName, new Action<OutputStream>() {
+                    void execute(OutputStream outputStream) {
+                        descriptor.writeTo(new OutputStreamWriter(outputStream))
+                    }
+                });
                 return new FileTreeAdapter(descriptorSource)
             }
             return null
         }
+    }
+
+    @Inject
+    protected Instantiator getInstantiator() {
+        throw new UnsupportedOperationException();
     }
 
     /**
@@ -100,7 +110,7 @@ class Ear extends Jar {
      */
     Ear deploymentDescriptor(Closure configureClosure) {
         if (!deploymentDescriptor) {
-            deploymentDescriptor = new DefaultDeploymentDescriptor(project.fileResolver) // implied use of ProjectInternal
+            deploymentDescriptor = instantiator.newInstance(DefaultDeploymentDescriptor, project.fileResolver, getInstantiator()) // implied use of ProjectInternal
         }
         ConfigureUtil.configure(configureClosure, deploymentDescriptor)
         this

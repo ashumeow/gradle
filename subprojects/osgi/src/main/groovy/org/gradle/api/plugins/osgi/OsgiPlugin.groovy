@@ -26,14 +26,13 @@ import org.gradle.api.plugins.JavaPlugin
  */
 public class OsgiPlugin implements Plugin<Project> {
     public void apply(Project project) {
-        project.plugins.apply(JavaBasePlugin)
+        project.apply(type: JavaBasePlugin)
 
         def osgiConvention = new OsgiPluginConvention(project)
         project.convention.plugins.osgi = osgiConvention
 
         project.plugins.withType(JavaPlugin) {
             def osgiManifest = osgiConvention.osgiManifest {
-                from project.manifest
                 classesDir = project.sourceSets.main.output.classesDir
                 classpath = project.configurations.runtime
             }

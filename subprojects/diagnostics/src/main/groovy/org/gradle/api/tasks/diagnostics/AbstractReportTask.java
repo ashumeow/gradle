@@ -24,8 +24,10 @@ import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.diagnostics.internal.ReportRenderer;
+import org.gradle.initialization.BuildClientMetaData;
 import org.gradle.logging.StyledTextOutputFactory;
 
+import javax.inject.Inject;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashSet;
@@ -38,7 +40,7 @@ import java.util.TreeSet;
 public abstract class AbstractReportTask extends ConventionTask {
     private File outputFile;
 
-    // todo annotate as required 
+    // todo annotate as required
     private Set<Project> projects;
 
     protected AbstractReportTask() {
@@ -51,15 +53,26 @@ public abstract class AbstractReportTask extends ConventionTask {
         projects.add(getProject());
     }
 
+    @Inject
+    protected BuildClientMetaData getClientMetaData() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Inject
+    protected StyledTextOutputFactory getTextOutputFactory() {
+        throw new UnsupportedOperationException();
+    }
+
     @TaskAction
     public void generate() {
         try {
             ReportRenderer renderer = getRenderer();
+            renderer.setClientMetaData(getClientMetaData());
             File outputFile = getOutputFile();
             if (outputFile != null) {
                 renderer.setOutputFile(outputFile);
             } else {
-                renderer.setOutput(getServices().get(StyledTextOutputFactory.class).create(getClass()));
+                renderer.setOutput(getTextOutputFactory().create(getClass()));
             }
             Set<Project> projects = new TreeSet<Project>(getProjects());
             for (Project project : projects) {

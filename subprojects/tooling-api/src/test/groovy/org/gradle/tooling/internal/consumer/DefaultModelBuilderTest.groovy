@@ -56,6 +56,7 @@ class DefaultModelBuilderTest extends ConcurrentSpec {
             assert params.jvmArguments == null
             assert params.arguments == null
             assert params.progressListener != null
+            assert params.cancellationToken != null
             assert params.tasks == null
             return result
         }

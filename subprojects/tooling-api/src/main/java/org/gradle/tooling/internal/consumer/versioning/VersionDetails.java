@@ -35,11 +35,11 @@ public abstract class VersionDetails {
         return false;
     }
 
-    public boolean supportsGradleProjectModel() {
+    public boolean supportsTaskDisplayName() {
         return false;
     }
 
-    public boolean supportsTaskDisplayName() {
+    public boolean supportsCancellation() {
         return false;
     }
 }

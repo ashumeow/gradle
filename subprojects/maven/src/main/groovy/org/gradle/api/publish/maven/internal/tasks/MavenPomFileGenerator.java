@@ -17,15 +17,20 @@
 package org.gradle.api.publish.maven.internal.tasks;
 
 import org.apache.maven.model.Dependency;
+import org.apache.maven.model.Exclusion;
 import org.apache.maven.model.Model;
 import org.apache.maven.project.MavenProject;
 import org.gradle.api.Action;
 import org.gradle.api.UncheckedIOException;
 import org.gradle.api.XmlProvider;
 import org.gradle.api.artifacts.DependencyArtifact;
-import org.gradle.api.internal.xml.XmlTransformer;
+import org.gradle.api.artifacts.ExcludeRule;
+import org.gradle.api.publication.maven.internal.MavenVersionRangeMapper;
+import org.gradle.api.publication.maven.internal.VersionRangeMapper;
 import org.gradle.api.publish.maven.internal.dependencies.MavenDependencyInternal;
 import org.gradle.api.publish.maven.internal.publisher.MavenProjectIdentity;
+import org.gradle.internal.xml.XmlTransformer;
+import org.gradle.util.GUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,6 +43,7 @@ public class MavenPomFileGenerator {
 
     private MavenProject mavenProject = new MavenProject();
     private XmlTransformer xmlTransformer = new XmlTransformer();
+    private VersionRangeMapper versionRangeMapper= new MavenVersionRangeMapper();
 
     public MavenPomFileGenerator(MavenProjectIdentity identity) {
         mavenProject.setModelVersion(POM_VERSION);
@@ -74,12 +80,23 @@ public class MavenPomFileGenerator {
         Dependency mavenDependency = new Dependency();
         mavenDependency.setGroupId(dependency.getGroupId());
         mavenDependency.setArtifactId(artifactId);
-        mavenDependency.setVersion(dependency.getVersion());
+        mavenDependency.setVersion(mapToMavenSyntax(dependency.getVersion()));
         mavenDependency.setType(type);
         mavenDependency.setScope(scope);
         mavenDependency.setClassifier(classifier);
 
+        for (ExcludeRule excludeRule : dependency.getExcludeRules()) {
+            Exclusion exclusion = new Exclusion();
+            exclusion.setGroupId(GUtil.elvis(excludeRule.getGroup(), "*"));
+            exclusion.setArtifactId(GUtil.elvis(excludeRule.getModule(), "*"));
+            mavenDependency.addExclusion(exclusion);
+        }
+
         getModel().addDependency(mavenDependency);
+    }
+
+    private String mapToMavenSyntax(String version) {
+        return versionRangeMapper.map(version);
     }
 
     public MavenPomFileGenerator withXml(final Action<XmlProvider> action) {

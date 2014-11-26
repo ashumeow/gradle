@@ -1,5 +1,11 @@
+apply plugin: 'osgi'
+
 import org.gradle.build.*
 import org.gradle.api.internal.artifacts.publish.ArchivePublishArtifact
+
+sourceSets {
+    providerPatch
+}
 
 dependencies {
     compile project(path: ':core', configuration: "publishCompileWithProjectJar")
@@ -7,6 +13,9 @@ dependencies {
     compile project(':wrapper')
     compile project(':baseServices')
     publishCompile libraries.slf4j_api
+
+    providerPatchCompile(group: 'org.gradle', name: 'gradle-core', version: '1.8')
+    providerPatchCompile libraries.jcip
 
     testFixturesCompile project(':baseServicesGroovy')
     testCompile libraries.groovy
@@ -20,9 +29,29 @@ dependencies {
 }
 
 useTestFixtures()
+useTestFixtures(project: ':launcher', sourceSet: "integTest")
+
+task patchJar(type: Jar) {
+    dependsOn providerPatchClasses
+    // baseName 'gradle-tooling-api-patch'
+    appendix 'provider-patch'
+    archiveName "${baseName}-${appendix}.${extension}"
+    from fileTree("$buildDir/classes/providerPatch")
+}
+
+task patchResources(type: Copy) {
+    dependsOn patchJar
+    from patchJar.outputs.files
+    into "$generatedResourcesDir/org/gradle/tooling/internal/consumer"
+}
+processResources.dependsOn patchResources
 
 integTestTasks.all {
     dependsOn({ rootProject.getTasksByName('publishLocalArchives', true) }, ':distributions:binZip')
+
+    if (isCiServer) {
+        maxParallelForks = Math.min(2, rootProject.maxParallelForks)
+    }
 }
 
 daemonIntegTest {
@@ -31,7 +60,7 @@ daemonIntegTest {
 
 task jarjarJar(type: JarJarJar) {
     appendix = "fat"
-    dependsOn jar
+    dependsOn jar, providerPatchClasses
     doFirst {
         from(zipTree(jar.getArchivePath()))
         (configurations.runtime - configurations.publishCompile).each {
@@ -40,6 +69,7 @@ task jarjarJar(type: JarJarJar) {
     }
     exclude "META-INF/**"
     exclude "*classpath.properties"
+    exclude 'org/gradle/tooling/internal/consumer/' + patchJar.archiveName // JarJar corrupts the content
 
     rule('org.gradle.**', '@0')
     rule('org.slf4j.**', '@0')
@@ -51,6 +81,33 @@ task jarjarJar(type: JarJarJar) {
     keep('org.gradle.tooling.**')
 }
 
+// revert manifest back after applying 'osgi' plugin
+ext.gradleManifest = manifest {
+    attributes("Implementation-Title": "Gradle",
+            "Implementation-Version": version)
+}
+jar {
+    manifest = project.manifest {
+        from gradleManifest
+    }
+}
+
+task publishJar(type: Jar) {
+    appendix = "bundle"
+    dependsOn jar, jarjarJar, patchJar
+    from(zipTree(jarjarJar.getArchivePath()), { exclude 'META-INF/MANIFEST.MF'})
+    from(patchJar.outputs.files, { into 'org/gradle/tooling/internal/consumer'})
+    manifest = osgiManifest {
+        classesDir = sourceSets.main.output.classesDir
+        classpath = sourceSets.main.runtimeClasspath
+        instruction 'Import-Package', 'org.slf4j'
+        instruction 'Export-Package', '!org.gradle.tooling.internal.*,!org.gradle.tooling.model.internal.*,' +
+                'org.gradle.tooling.*,org.gradle.api,org.gradle.api.specs,org.gradle.tooling.internal.consumer,org.gradle.util'
+        instruction 'Implementation-Title', 'Gradle'
+        instruction 'Implementation-Version', version
+    }
+}
+
 sourceJar{
     configurations.compile.allDependencies.withType(ProjectDependency).each {
         from it.dependencyProject.sourceSets.main.groovy.srcDirs
@@ -59,11 +116,11 @@ sourceJar{
 }
 
 artifacts {
-    publishCompileWithProjectJar jarjarJar
-    publishRuntime file: jarjarJar.getArchivePath(), name: archivesBaseName, type: 'jar', builtBy: jarjarJar
+    publishCompileWithProjectJar publishJar
+    publishRuntime file: publishJar.getArchivePath(), name: archivesBaseName, type: 'jar', builtBy: publishJar
 }
 
-configurations.publishRuntime { artifacts.removeAll { it instanceof ArchivePublishArtifact && it.archiveTask == jar } }
+configurations.publishRuntime { artifacts.removeAll { it instanceof ArchivePublishArtifact && it.archiveTask in [jar, jarjarJar] } }
 
 eclipse {
     classpath {

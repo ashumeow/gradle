@@ -18,11 +18,9 @@ package org.gradle.testing
 import org.apache.commons.lang.RandomStringUtils
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.DefaultTestExecutionResult
-import org.gradle.internal.os.OperatingSystem
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
 import org.hamcrest.Matchers
-import spock.lang.IgnoreIf
 import spock.lang.Issue
 import spock.lang.Unroll
 
@@ -31,7 +29,7 @@ import spock.lang.Unroll
  */
 class TestingIntegrationTest extends AbstractIntegrationSpec {
 
-    @Issue("http://issues.gradle.org/browse/GRADLE-1948")
+    @Issue("https://issues.gradle.org/browse/GRADLE-1948")
     def "test interrupting its own thread does not kill test execution"() {
         given:
         buildFile << """
@@ -145,7 +143,7 @@ class TestingIntegrationTest extends AbstractIntegrationSpec {
         results.testClass("ExceptionTest").assertTestFailed("testThrow", Matchers.equalTo('ExceptionTest$BadlyBehavedException: Broken readObject()'))
     }
 
-    @IgnoreIf({ OperatingSystem.current().isWindows() })
+    @Requires(TestPrecondition.NOT_WINDOWS)
     def "can use long paths for working directory"() {
         given:
         // windows can handle a path up to 260 characters
@@ -176,7 +174,7 @@ class TestingIntegrationTest extends AbstractIntegrationSpec {
         succeeds "test"
     }
 
-    @Issue("http://issues.gradle.org/browse/GRADLE-2313")
+    @Issue("https://issues.gradle.org/browse/GRADLE-2313")
     @Unroll
     "can clean test after extracting class file with #framework"() {
         when:
@@ -203,7 +201,7 @@ class TestingIntegrationTest extends AbstractIntegrationSpec {
         "useTestNG" | "org.testng:testng:6.3.1" | "org.testng.Converter"
     }
 
-    @Issue("http://issues.gradle.org/browse/GRADLE-2527")
+    @Issue("https://issues.gradle.org/browse/GRADLE-2527")
     def "test class detection works for custom test tasks"() {
         given:
         buildFile << """
@@ -251,8 +249,7 @@ class TestingIntegrationTest extends AbstractIntegrationSpec {
         result.assertTestClassesExecuted("TestCaseExtendsAbstractClass")
     }
 
-    @Requires(TestPrecondition.JDK6_OR_LATER) // Guava 15 requires JDK 6
-    @Issue("http://issues.gradle.org/browse/GRADLE-2962")
+    @Issue("https://issues.gradle.org/browse/GRADLE-2962")
     def "incompatible user versions of classes that we also use don't affect test execution"() {
 
         // These dependencies are quite particular.

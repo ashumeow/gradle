@@ -15,7 +15,7 @@
  */
 package org.gradle.launcher.daemon.context
 
-import org.gradle.internal.nativeplatform.ProcessEnvironment
+import org.gradle.internal.nativeintegration.ProcessEnvironment
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.gradle.util.ConfigureUtil
 import org.gradle.util.Requires
@@ -30,11 +30,11 @@ class DaemonCompatibilitySpecSpec extends Specification {
     def clientConfigure = {}
     def serverConfigure = {}
 
-    def client(Closure c) {
+    def client(@DelegatesTo(DaemonContextBuilder) Closure c) {
         clientConfigure = c
     }
 
-    def server(Closure c) {
+    def server(@DelegatesTo(DaemonContextBuilder) Closure c) {
         serverConfigure = c
     }
 

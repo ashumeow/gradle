@@ -53,7 +53,12 @@ public interface TaskInternal extends Task, Configurable<Task> {
 
     void addValidator(TaskValidator validator);
 
-    TaskStateInternal getStateInternal();
+    TaskStateInternal getState();
+
+    boolean getImpliesSubProjects();
+
+    void setImpliesSubProjects(boolean impliesSubProjects);
+
     /**
      * The returned factory is expected to return the same file each time.
      * <p>

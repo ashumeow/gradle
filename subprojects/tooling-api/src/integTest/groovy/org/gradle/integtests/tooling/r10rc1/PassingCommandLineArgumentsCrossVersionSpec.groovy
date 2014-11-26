@@ -20,12 +20,10 @@ package org.gradle.integtests.tooling.r10rc1
 
 import org.gradle.integtests.tooling.fixture.TargetGradleVersion
 import org.gradle.integtests.tooling.fixture.ToolingApiSpecification
-import org.gradle.integtests.tooling.fixture.ToolingApiVersion
 import org.gradle.tooling.ProjectConnection
 import org.gradle.tooling.exceptions.UnsupportedBuildArgumentException
 import org.gradle.tooling.model.GradleProject
 
-@ToolingApiVersion(">=1.0")
 @TargetGradleVersion(">=1.0")
 class PassingCommandLineArgumentsCrossVersionSpec extends ToolingApiSpecification {
 
@@ -82,7 +80,7 @@ class PassingCommandLineArgumentsCrossVersionSpec extends ToolingApiSpecificatio
 
     def "can use custom log level"() {
         //logging infrastructure is not installed when running in-process to avoid issues
-        toolingApi.isEmbedded = false
+        toolingApi.requireDaemons()
 
         given:
         file("build.gradle") << """

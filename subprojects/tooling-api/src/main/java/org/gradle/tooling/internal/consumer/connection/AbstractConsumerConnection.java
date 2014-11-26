@@ -21,7 +21,6 @@ import org.gradle.tooling.internal.consumer.ConnectionParameters;
 import org.gradle.tooling.internal.consumer.parameters.ConsumerOperationParameters;
 import org.gradle.tooling.internal.consumer.versioning.VersionDetails;
 import org.gradle.tooling.internal.protocol.ConnectionVersion4;
-import org.gradle.tooling.model.internal.Exceptions;
 
 public abstract class AbstractConsumerConnection implements ConsumerConnection {
     private final ConnectionVersion4 delegate;
@@ -33,7 +32,6 @@ public abstract class AbstractConsumerConnection implements ConsumerConnection {
     }
 
     public void stop() {
-        delegate.stop();
     }
 
     public String getDisplayName() {
@@ -50,7 +48,15 @@ public abstract class AbstractConsumerConnection implements ConsumerConnection {
 
     public abstract void configure(ConnectionParameters connectionParameters);
 
-    public <T> T run(BuildAction<T> action, ConsumerOperationParameters operationParameters) throws UnsupportedOperationException, IllegalStateException {
-        throw Exceptions.unsupportedFeature("execution of build actions provided by the tooling API client", getVersionDetails().getVersion(), "1.8");
+    protected abstract ModelProducer getModelProducer();
+
+    protected abstract ActionRunner getActionRunner();
+
+    public <T> T run(Class<T> type, ConsumerOperationParameters operationParameters) {
+        return getModelProducer().produceModel(type, operationParameters);
+    }
+
+    public <T> T run(BuildAction<T> action, ConsumerOperationParameters operationParameters) {
+        return getActionRunner().run(action, operationParameters);
     }
 }

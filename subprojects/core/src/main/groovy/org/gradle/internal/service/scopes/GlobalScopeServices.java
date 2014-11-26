@@ -24,18 +24,22 @@ import org.gradle.api.internal.classpath.DefaultPluginModuleRegistry;
 import org.gradle.api.internal.classpath.ModuleRegistry;
 import org.gradle.api.internal.classpath.PluginModuleRegistry;
 import org.gradle.api.internal.file.*;
+import org.gradle.api.internal.initialization.loadercache.ClassLoaderCacheFactory;
 import org.gradle.cache.internal.*;
 import org.gradle.cache.internal.locklistener.DefaultFileLockContentionHandler;
 import org.gradle.cache.internal.locklistener.FileLockContentionHandler;
 import org.gradle.cli.CommandLineConverter;
-import org.gradle.initialization.*;
+import org.gradle.initialization.ClassLoaderRegistry;
+import org.gradle.initialization.DefaultClassLoaderRegistry;
+import org.gradle.initialization.DefaultCommandLineConverter;
+import org.gradle.initialization.DefaultGradleLauncherFactory;
 import org.gradle.internal.classloader.ClassLoaderFactory;
 import org.gradle.internal.classloader.DefaultClassLoaderFactory;
 import org.gradle.internal.concurrent.DefaultExecutorFactory;
 import org.gradle.internal.concurrent.ExecutorFactory;
 import org.gradle.internal.environment.GradleBuildEnvironment;
-import org.gradle.internal.nativeplatform.ProcessEnvironment;
-import org.gradle.internal.nativeplatform.filesystem.FileSystem;
+import org.gradle.internal.nativeintegration.ProcessEnvironment;
+import org.gradle.internal.nativeintegration.filesystem.FileSystem;
 import org.gradle.internal.reflect.DirectInstantiator;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.service.ServiceLocator;
@@ -50,7 +54,7 @@ import org.gradle.messaging.remote.internal.inet.InetAddressFactory;
 import java.util.List;
 
 /**
- * Defines the services shared by all builds in a given process.
+ * Defines the global services shared by all services in a given process. This includes the Gradle CLI, daemon and tooling API provider.
  */
 public class GlobalScopeServices {
 
@@ -65,14 +69,14 @@ public class GlobalScopeServices {
     }
 
     void configure(ServiceRegistration registration, ClassLoaderRegistry classLoaderRegistry) {
-        final List<PluginServiceRegistry> pluginServiceFactories = new ServiceLocator(classLoaderRegistry.getRuntimeClassLoader(), classLoaderRegistry.getCoreImplClassLoader(), classLoaderRegistry.getPluginsClassLoader()).getAll(PluginServiceRegistry.class);
+        final List<PluginServiceRegistry> pluginServiceFactories = new ServiceLocator(classLoaderRegistry.getRuntimeClassLoader(), classLoaderRegistry.getPluginsClassLoader()).getAll(PluginServiceRegistry.class);
         for (PluginServiceRegistry pluginServiceRegistry : pluginServiceFactories) {
             registration.add(PluginServiceRegistry.class, pluginServiceRegistry);
             pluginServiceRegistry.registerGlobalServices(registration);
         }
     }
 
-    GradleLauncherFactory createGradleLauncherFactory(ServiceRegistry services) {
+    DefaultGradleLauncherFactory createGradleLauncherFactory(ServiceRegistry services) {
         return new DefaultGradleLauncherFactory(services);
     }
 
@@ -124,7 +128,7 @@ public class GlobalScopeServices {
     }
 
     MessagingServices createMessagingServices(ClassLoaderRegistry classLoaderRegistry) {
-        return new MessagingServices(classLoaderRegistry.getPluginsClassLoader());
+        return new MessagingServices(getClass().getClassLoader());
     }
 
     MessagingServer createMessagingServer(MessagingServices messagingServices) {
@@ -167,6 +171,10 @@ public class GlobalScopeServices {
 
     FileLookup createFileLookup(FileSystem fileSystem) {
         return new DefaultFileLookup(fileSystem);
+    }
+
+    ClassLoaderCacheFactory createClassLoaderCacheFactory() {
+        return new ClassLoaderCacheFactory();
     }
 
 }

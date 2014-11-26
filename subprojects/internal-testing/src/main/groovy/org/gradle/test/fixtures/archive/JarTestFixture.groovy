@@ -17,18 +17,24 @@
 package org.gradle.test.fixtures.archive
 
 import org.apache.commons.io.IOUtils
+import org.gradle.api.JavaVersion
+import org.gradle.test.fixtures.file.ClassFile
 
+import java.util.jar.JarEntry
 import java.util.jar.JarFile
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 
 class JarTestFixture extends ZipTestFixture {
+    final int classFileDescriptor = 0xCAFEBABE
+
     File file
 
     /**
      * Asserts that the Jar file is well-formed
      */
-     JarTestFixture(File file) {super(file)
+     JarTestFixture(File file) {
+         super(file)
          this.file = file
          isManifestPresentAndFirstEntry()
      }
@@ -58,5 +64,22 @@ class JarTestFixture extends ZipTestFixture {
         finally {
             IOUtils.closeQuietly(zip)
         }
+    }
+
+    @Override
+    def hasDescendants(String... relativePaths) {
+        String[] allDescendants = relativePaths + JarFile.MANIFEST_NAME
+        return super.hasDescendants(allDescendants)
+    }
+
+    def getJavaVersion() {
+        JarFile jarFile = new JarFile(file)
+        //take the first class file
+        JarEntry classEntry = jarFile.entries().find { entry -> entry.name.endsWith(".class") }
+        if (classEntry == null) {
+            throw new Exception("Could not find a class entry for: " + file)
+        }
+        ClassFile classFile = new ClassFile(jarFile.getInputStream(classEntry))
+        return JavaVersion.forClassVersion(classFile.classFileVersion)
     }
 }

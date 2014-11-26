@@ -61,10 +61,8 @@ class FindBugsPlugin extends AbstractCodeQualityPlugin<FindBugs> {
 
     @Override
     protected CodeQualityExtension createExtension() {
-        extension = project.extensions.create("findbugs", FindBugsExtension)
-        extension.with {
-            toolVersion = "2.0.1"
-        }
+        extension = project.extensions.create("findbugs", FindBugsExtension, project)
+        extension.toolVersion = "3.0.0"
         return extension
     }
 
@@ -86,8 +84,8 @@ class FindBugsPlugin extends AbstractCodeQualityPlugin<FindBugs> {
             reportLevel = { extension.reportLevel }
             visitors = { extension.visitors }
             omitVisitors = { extension.omitVisitors }
-            excludeFilter = { extension.excludeFilter }
-            includeFilter = { extension.includeFilter }
+            excludeFilterConfig = { extension.excludeFilterConfig }
+            includeFilterConfig = { extension.includeFilterConfig }
  
         }
         task.reports.all { Report report ->

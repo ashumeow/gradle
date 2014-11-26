@@ -16,33 +16,48 @@
 
 package org.gradle.logging.internal;
 
-import org.gradle.StartParameter;
 import org.gradle.api.Action;
-import org.gradle.internal.nativeplatform.console.ConsoleMetaData;
-import org.gradle.internal.nativeplatform.console.ConsoleDetector;
-import org.gradle.internal.nativeplatform.services.NativeServices;
+import org.gradle.internal.nativeintegration.console.ConsoleDetector;
+import org.gradle.internal.nativeintegration.console.ConsoleMetaData;
+import org.gradle.internal.nativeintegration.console.FallbackConsoleMetaData;
+import org.gradle.internal.nativeintegration.services.NativeServices;
+import org.gradle.logging.ConsoleOutput;
 
-import java.io.PrintStream;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 
 public class ConsoleConfigureAction implements Action<OutputEventRenderer> {
+
     public void execute(OutputEventRenderer renderer) {
-        StartParameter startParameter = new StartParameter();
-        NativeServices.initialize(startParameter.getGradleUserHomeDir());
-        ConsoleDetector consoleDetector = NativeServices.getInstance().get(ConsoleDetector.class);
-        ConsoleMetaData consoleMetaData = consoleDetector.getConsole();
-        if (consoleMetaData == null) {
+        ConsoleOutput consoleOutput = renderer.getConsoleOutput();
+        if (consoleOutput == ConsoleOutput.Disable) {
             return;
         }
+
+        ConsoleDetector consoleDetector = NativeServices.getInstance().get(ConsoleDetector.class);
+        ConsoleMetaData consoleMetaData = consoleDetector.getConsole();
+        boolean force = false;
+        if (consoleMetaData == null) {
+            if (consoleOutput == ConsoleOutput.Auto) {
+                return;
+            }
+            assert consoleOutput == ConsoleOutput.Enable;
+            consoleMetaData = new FallbackConsoleMetaData();
+            force = true;
+        }
+
         boolean stdOutIsTerminal = consoleMetaData.isStdOut();
         boolean stdErrIsTerminal = consoleMetaData.isStdErr();
         if (stdOutIsTerminal) {
-            PrintStream outStr = new PrintStream(org.fusesource.jansi.AnsiConsole.wrapOutputStream(renderer.getOriginalStdOut()));
-            Console console = new AnsiConsole(outStr, outStr, renderer.getColourMap());
+            OutputStream originalStdOut = renderer.getOriginalStdOut();
+            OutputStreamWriter outStr = new OutputStreamWriter(force ? originalStdOut : org.fusesource.jansi.AnsiConsole.wrapOutputStream(originalStdOut));
+            Console console = new AnsiConsole(outStr, outStr, renderer.getColourMap(), force);
             renderer.addConsole(console, true, stdErrIsTerminal, consoleMetaData);
         } else if (stdErrIsTerminal) {
             // Only stderr is connected to a terminal
-            PrintStream errStr = new PrintStream(org.fusesource.jansi.AnsiConsole.wrapOutputStream(renderer.getOriginalStdErr()));
-            Console console = new AnsiConsole(errStr, errStr, renderer.getColourMap());
+            OutputStream originalStdErr = renderer.getOriginalStdErr();
+            OutputStreamWriter errStr = new OutputStreamWriter(force ? originalStdErr : org.fusesource.jansi.AnsiConsole.wrapOutputStream(originalStdErr));
+            Console console = new AnsiConsole(errStr, errStr, renderer.getColourMap(), force);
             renderer.addConsole(console, false, true, consoleMetaData);
         }
     }

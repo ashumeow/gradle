@@ -16,16 +16,18 @@
 
 package org.gradle.configuration.project;
 
+import org.gradle.api.Action;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.internal.tasks.TaskContainerInternal;
+import org.gradle.model.internal.type.ModelType;
 
 /**
  * Realizes the project tasks by getting the closed task container from the model registry.
  */
-public class TaskModelRealizingConfigurationAction implements ProjectConfigureAction {
+public class TaskModelRealizingConfigurationAction implements Action<ProjectInternal> {
 
     public void execute(ProjectInternal projectInternal) {
-        projectInternal.getModelRegistry().get(TaskContainerInternal.MODEL_PATH, Object.class);
+        projectInternal.getModelRegistry().get(TaskContainerInternal.MODEL_PATH, ModelType.UNTYPED);
     }
 
 }

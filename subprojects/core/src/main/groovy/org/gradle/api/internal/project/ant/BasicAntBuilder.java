@@ -18,14 +18,16 @@ package org.gradle.api.internal.project.ant;
 import groovy.util.AntBuilder;
 import org.apache.tools.ant.Project;
 import org.apache.tools.ant.Target;
+import org.gradle.api.Transformer;
 import org.gradle.api.internal.file.ant.AntFileResource;
 import org.gradle.api.internal.file.ant.BaseDirSelector;
 
+import java.io.Closeable;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 
-public class BasicAntBuilder extends org.gradle.api.AntBuilder {
+public class BasicAntBuilder extends org.gradle.api.AntBuilder implements Closeable {
     private final Field nodeField;
     private final List children;
 
@@ -60,6 +62,10 @@ public class BasicAntBuilder extends org.gradle.api.AntBuilder {
     }
 
     public void importBuild(Object antBuildFile) {
+        throw new UnsupportedOperationException();
+    }
+
+    public void importBuild(Object antBuildFile, Transformer<? extends String, ? super String> taskNamer) {
         throw new UnsupportedOperationException();
     }
 

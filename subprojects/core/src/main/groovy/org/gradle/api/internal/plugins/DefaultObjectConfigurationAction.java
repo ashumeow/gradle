@@ -30,30 +30,26 @@ import org.gradle.groovy.scripts.UriScriptSource;
 import org.gradle.util.GUtil;
 
 import java.net.URI;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
 public class DefaultObjectConfigurationAction implements ObjectConfigurationAction {
+
     private final FileResolver resolver;
     private final ScriptPluginFactory configurerFactory;
     private final ScriptHandlerFactory scriptHandlerFactory;
     private final Set<Object> targets = new LinkedHashSet<Object>();
     private final Set<Runnable> actions = new LinkedHashSet<Runnable>();
     private final ClassLoaderScope classLoaderScope;
-    private final Object[] defaultTargets;
+    private final Object defaultTarget;
 
-    public DefaultObjectConfigurationAction(
-            FileResolver resolver,
-            ScriptPluginFactory configurerFactory,
-            ScriptHandlerFactory scriptHandlerFactory,
-            ClassLoaderScope classLoaderScope,
-            Object... defaultTargets
-    ) {
+    public DefaultObjectConfigurationAction(FileResolver resolver, ScriptPluginFactory configurerFactory, ScriptHandlerFactory scriptHandlerFactory, ClassLoaderScope classLoaderScope, Object defaultTarget) {
         this.resolver = resolver;
         this.configurerFactory = configurerFactory;
         this.scriptHandlerFactory = scriptHandlerFactory;
         this.classLoaderScope = classLoaderScope;
-        this.defaultTargets = defaultTargets;
+        this.defaultTarget = defaultTarget;
     }
 
     public ObjectConfigurationAction to(Object... targets) {
@@ -82,7 +78,16 @@ public class DefaultObjectConfigurationAction implements ObjectConfigurationActi
     public ObjectConfigurationAction plugin(final String pluginId) {
         actions.add(new Runnable() {
             public void run() {
-                applyPlugin(pluginId);
+                applyType(pluginId);
+            }
+        });
+        return this;
+    }
+
+    public ObjectConfigurationAction type(final Class<?> pluginClass) {
+        actions.add(new Runnable() {
+            public void run() {
+                applyType(pluginClass);
             }
         });
         return this;
@@ -91,38 +96,41 @@ public class DefaultObjectConfigurationAction implements ObjectConfigurationActi
     private void applyScript(Object script) {
         URI scriptUri = resolver.resolveUri(script);
         UriScriptSource scriptSource = new UriScriptSource("script", scriptUri);
-        ScriptHandler scriptHandler = scriptHandlerFactory.create(scriptSource, classLoaderScope);
-        ScriptPlugin configurer = configurerFactory.create(scriptSource, scriptHandler, classLoaderScope, "buildscript", DefaultScript.class);
+        ClassLoaderScope classLoaderScopeChild = classLoaderScope.createChild();
+        ScriptHandler scriptHandler = scriptHandlerFactory.create(scriptSource, classLoaderScopeChild);
+        ScriptPlugin configurer = configurerFactory.create(scriptSource, scriptHandler, classLoaderScopeChild, classLoaderScope, "buildscript", DefaultScript.class, false);
         for (Object target : targets) {
             configurer.apply(target);
         }
     }
 
     private void applyPlugin(Class<? extends Plugin> pluginClass) {
-        for (Object target : targets) {
-            if (target instanceof PluginAware) {
-                PluginAware pluginAware = (PluginAware) target;
-                pluginAware.getPlugins().apply(pluginClass);
-            } else {
-                throw new UnsupportedOperationException(String.format("Cannot apply plugin of class '%s' to '%s' (class: %s) as it does not implement PluginAware", pluginClass.getName(), target.toString(), target.getClass().getName()));
-            }
-        }
+        applyType(pluginClass);
     }
 
-    private void applyPlugin(String pluginId) {
+    private void applyType(String pluginId) {
         for (Object target : targets) {
             if (target instanceof PluginAware) {
-                PluginAware pluginAware = (PluginAware) target;
-                pluginAware.getPlugins().apply(pluginId);
+                ((PluginAware) target).apply(Collections.singletonMap("plugin", pluginId));
             } else {
                 throw new UnsupportedOperationException(String.format("Cannot apply plugin with id '%s' to '%s' (class: %s) as it does not implement PluginAware", pluginId, target.toString(), target.getClass().getName()));
             }
         }
     }
 
+    private void applyType(Class<?> pluginClass) {
+        for (Object target : targets) {
+            if (target instanceof PluginAware) {
+                ((PluginAware) target).apply(Collections.singletonMap("plugin", pluginClass));
+            } else {
+                throw new UnsupportedOperationException(String.format("Cannot apply plugin of class '%s' to '%s' (class: %s) as it does not implement PluginAware", pluginClass.getName(), target.toString(), target.getClass().getName()));
+            }
+        }
+    }
+
     public void execute() {
         if (targets.isEmpty()) {
-            to(defaultTargets);
+            to(defaultTarget);
         }
 
         for (Runnable action : actions) {

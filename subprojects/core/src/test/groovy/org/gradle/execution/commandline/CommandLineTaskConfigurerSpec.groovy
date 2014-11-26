@@ -145,9 +145,8 @@ class CommandLineTaskConfigurerSpec extends Specification {
     }
 
     def "fails on unknown option"() {
-        def args = ['--xxx']
         when:
-        configurer.configureTasks([task, task2], args)
+        configurer.configureTasks([task, task2], ['--xxx'])
 
         then:
         def ex = thrown(TaskConfigurationException)
@@ -155,9 +154,8 @@ class CommandLineTaskConfigurerSpec extends Specification {
     }
 
     def "fails neatly when short option used"() {
-        def args = ['--someFlag', '-c']
         when:
-        configurer.configureTasks([task], args)
+        configurer.configureTasks([task], ['--someFlag', '-c'])
 
         then:
         def ex = thrown(TaskConfigurationException)
@@ -217,6 +215,7 @@ class CommandLineTaskConfigurerSpec extends Specification {
         }
     }
 
+    @SuppressWarnings('FieldName')
     enum TestEnum {
         value1, value2
     }

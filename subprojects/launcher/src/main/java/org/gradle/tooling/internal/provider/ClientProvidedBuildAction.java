@@ -16,19 +16,17 @@
 
 package org.gradle.tooling.internal.provider;
 
-import org.gradle.api.Action;
+import org.gradle.api.BuildCancelledException;
 import org.gradle.api.internal.GradleInternal;
-import org.gradle.api.internal.project.ProjectInternal;
+import org.gradle.execution.ProjectConfigurer;
 import org.gradle.initialization.BuildAction;
 import org.gradle.initialization.BuildController;
-import org.gradle.initialization.DefaultGradleLauncher;
-import org.gradle.initialization.ModelConfigurationListener;
 import org.gradle.tooling.internal.protocol.InternalBuildAction;
 import org.gradle.tooling.internal.protocol.InternalBuildActionFailureException;
+import org.gradle.tooling.internal.protocol.InternalBuildCancelledException;
 import org.gradle.tooling.internal.protocol.InternalBuildController;
 
 import java.io.Serializable;
-import java.util.concurrent.atomic.AtomicReference;
 
 class ClientProvidedBuildAction implements BuildAction<BuildActionResult>, Serializable {
     private final SerializedPayload action;
@@ -38,44 +36,28 @@ class ClientProvidedBuildAction implements BuildAction<BuildActionResult>, Seria
     }
 
     public BuildActionResult run(final BuildController buildController) {
-        final DefaultGradleLauncher gradleLauncher = (DefaultGradleLauncher) buildController.getLauncher();
-        final PayloadSerializer payloadSerializer = gradleLauncher.getGradle().getServices().get(PayloadSerializer.class);
-        final InternalBuildAction<?> action = (InternalBuildAction<?>) payloadSerializer.deserialize(this.action);
+        GradleInternal gradle = buildController.getGradle();
+        PayloadSerializer payloadSerializer = gradle.getServices().get(PayloadSerializer.class);
+        InternalBuildAction<?> action = (InternalBuildAction<?>) payloadSerializer.deserialize(this.action);
 
-        // The following is all very awkward because the contract for BuildController is still just a
-        // rough wrapper around GradleLauncher, which means we can only get at the model and various
-        // services by using listeners.
-
-        final AtomicReference<Object> result = new AtomicReference<Object>();
-        final AtomicReference<RuntimeException> failure = new AtomicReference<RuntimeException>();
-
-        gradleLauncher.addListener(new ModelConfigurationListener() {
-            public void onConfigure(final GradleInternal gradle) {
-                // Currently need to force everything to be configured
-                ensureAllProjectsEvaluated(gradle);
-                InternalBuildController internalBuildController = new DefaultBuildController(gradle);
-                Object model = null;
-                try {
-                    model = action.execute(internalBuildController);
-                } catch (RuntimeException e) {
-                    failure.set(new InternalBuildActionFailureException(e));
-                }
-                result.set(model);
-            }
-        });
         buildController.configure();
+        // Currently need to force everything to be configured
+        gradle.getServices().get(ProjectConfigurer.class).configureHierarchy(gradle.getRootProject());
 
-        if (failure.get() != null) {
-            return new BuildActionResult(null, payloadSerializer.serialize(failure.get()));
+        InternalBuildController internalBuildController = new DefaultBuildController(gradle);
+        Object model = null;
+        Throwable failure = null;
+        try {
+            model = action.execute(internalBuildController);
+        } catch (BuildCancelledException e) {
+            failure = new InternalBuildCancelledException(e);
+        } catch (RuntimeException e) {
+            failure = new InternalBuildActionFailureException(e);
         }
-        return new BuildActionResult(payloadSerializer.serialize(result.get()), null);
-    }
 
-    private void ensureAllProjectsEvaluated(GradleInternal gradle) {
-        gradle.getRootProject().allprojects((Action) new Action<ProjectInternal>() {
-            public void execute(ProjectInternal projectInternal) {
-                projectInternal.evaluate();
-            }
-        });
+        if (failure != null) {
+            return new BuildActionResult(null, payloadSerializer.serialize(failure));
+        }
+        return new BuildActionResult(payloadSerializer.serialize(model), null);
     }
 }

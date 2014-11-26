@@ -658,6 +658,18 @@
                     </para>
                 </td>
             </tr>
+            <tr>
+                <td>
+                    <link linkend="javaGradle_plugin">
+                        <literal>java-gradle-plugin</literal>
+                    </link>
+                </td>
+                <td>java</td>
+                <td></td>
+                <td>
+                    <para>Assists with development of Gradle plugins by providing standard plugin build configuration and validation.</para>
+                </td>
+            </tr>
         </table>
     </section>
     <section>
@@ -734,8 +746,7 @@
     </section>
     <section>
         <title>Third party plugins</title>
-        <para>You can find a list of external plugins on the
-            <ulink url="http://wiki.gradle.org/display/GRADLE/Plugins">wiki</ulink>.
+        <para>You can find a list of external plugins at the <ulink url="http://plugins.gradle.org/">Gradle Plugins site</ulink>.
         </para>
     </section>
 </chapter>

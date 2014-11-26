@@ -16,31 +16,29 @@
 
 package org.gradle.integtests.tooling.m3
 
+import org.gradle.integtests.tooling.fixture.TestOutputStream
+import org.gradle.integtests.tooling.fixture.TestResultHandler
 import org.gradle.integtests.tooling.fixture.ToolingApiSpecification
 import org.gradle.test.fixtures.ConcurrentTestUtil
-import org.gradle.tooling.GradleConnectionException
+import org.gradle.test.fixtures.server.http.CyclicBarrierHttpServer
 import org.gradle.tooling.ProjectConnection
-import org.gradle.tooling.ResultHandler
-
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import org.junit.Rule
 
 class ToolingApiLoggingCrossVersionSpec extends ToolingApiSpecification {
+    @Rule CyclicBarrierHttpServer server = new CyclicBarrierHttpServer()
+
     def setup() {
-        toolingApi.isEmbedded = false
+        toolingApi.requireDaemons()
     }
 
     def "logging is live"() {
-        def marker = file("marker.txt")
-
+        String uuid = UUID.randomUUID().toString()
         file("build.gradle") << """
 task log << {
-    println "waiting"
-    def marker = file('${marker.toURI()}')
-    long timeout = System.currentTimeMillis() + 10000
-    while (!marker.file && System.currentTimeMillis() < timeout) { Thread.sleep(200) }
-    if (!marker.file) { throw new RuntimeException("Timeout waiting for marker file") }
-    println "finished"
+    println "waiting-${uuid}"
+    println "connecting to ${server.uri}"
+    new URL("${server.uri}").text
+    println "finished-${uuid}"
 }
 """
 
@@ -51,53 +49,20 @@ task log << {
             def build = connection.newBuild()
             build.standardOutput = output
             build.forTasks("log")
+            build.withArguments("-d", "-s")
             build.run(resultHandler)
-            ConcurrentTestUtil.poll(10) { output.toString().contains("waiting") }
-            marker.text = 'go!'
+            server.waitFor()
+            ConcurrentTestUtil.poll {
+                // Need to poll, as logging output is delivered asynchronously to client
+                assert output.toString().contains("waiting-" + uuid)
+            }
+            assert !output.toString().contains("finished-" + uuid)
+            server.release()
             resultHandler.finished()
         }
 
         then:
-        output.toString().contains("waiting")
-        output.toString().contains("finished")
-    }
-
-    class TestResultHandler implements ResultHandler<Object> {
-        final latch = new CountDownLatch(1)
-        def failure
-
-        void onComplete(Object result) {
-            latch.countDown()
-        }
-
-        void onFailure(GradleConnectionException failure) {
-            this.failure = failure
-            latch.countDown()
-        }
-
-        def finished() {
-            latch.await(10, TimeUnit.SECONDS)
-            if (failure != null) {
-                throw failure
-            }
-        }
-    }
-
-    class TestOutputStream extends OutputStream {
-        final buffer = new ByteArrayOutputStream()
-
-        @Override
-        void write(int b) throws IOException {
-            synchronized (buffer) {
-                buffer.write(b)
-            }
-        }
-
-        @Override
-        String toString() {
-            synchronized (buffer) {
-                return buffer.toString()
-            }
-        }
+        output.toString().contains("waiting-" + uuid)
+        output.toString().contains("finished-" + uuid)
     }
 }

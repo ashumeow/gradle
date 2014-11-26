@@ -16,19 +16,26 @@
 
 package org.gradle.tooling.internal.consumer.parameters;
 
+import com.google.common.collect.Lists;
+import org.gradle.api.GradleException;
+import org.gradle.initialization.BuildCancellationToken;
+import org.gradle.tooling.CancellationToken;
 import org.gradle.tooling.ProgressListener;
+import org.gradle.tooling.internal.adapter.ProtocolToModelAdapter;
+import org.gradle.tooling.internal.consumer.CancellationTokenInternal;
 import org.gradle.tooling.internal.consumer.ConnectionParameters;
-import org.gradle.tooling.internal.protocol.BuildOperationParametersVersion1;
-import org.gradle.tooling.internal.protocol.BuildParameters;
-import org.gradle.tooling.internal.protocol.BuildParametersVersion1;
-import org.gradle.tooling.internal.protocol.InternalLaunchable;
-import org.gradle.tooling.internal.protocol.ProgressListenerVersion1;
+import org.gradle.tooling.internal.gradle.TaskListingLaunchable;
+import org.gradle.tooling.internal.protocol.*;
+import org.gradle.tooling.model.Launchable;
+import org.gradle.tooling.model.Task;
 
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class ConsumerOperationParameters implements BuildOperationParametersVersion1, BuildParametersVersion1, BuildParameters {
@@ -39,9 +46,11 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
 
     public static class Builder {
         private final ProgressListenerAdapter progressListener = new ProgressListenerAdapter();
+        private CancellationToken cancellationToken;
         private ConnectionParameters parameters;
         private OutputStream stdout;
         private OutputStream stderr;
+        private Boolean colorOutput;
         private InputStream stdin;
         private File javaHome;
         private List<String> jvmArguments;
@@ -50,6 +59,10 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
         private List<InternalLaunchable> launchables;
 
         private Builder() {
+        }
+
+        public void setCancellationToken(CancellationToken cancellationToken) {
+            this.cancellationToken = cancellationToken;
         }
 
         public Builder setParameters(ConnectionParameters parameters) {
@@ -64,6 +77,11 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
 
         public Builder setStderr(OutputStream stderr) {
             this.stderr = stderr;
+            return this;
+        }
+
+        public Builder setColorOutput(Boolean colorOutput) {
+            this.colorOutput = colorOutput;
             return this;
         }
 
@@ -93,8 +111,27 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
             return this;
         }
 
-        public Builder setLaunchables(List<InternalLaunchable> launchables) {
-            this.launchables = launchables;
+        public Builder setLaunchables(Iterable<? extends Launchable> launchables) {
+            Set<String> taskPaths = new LinkedHashSet<String>();
+            List<InternalLaunchable> launchablesParams = Lists.newArrayList();
+            for (Launchable launchable : launchables) {
+                Object original = new ProtocolToModelAdapter().unpack(launchable);
+                if (original instanceof InternalLaunchable) {
+                    // A launchable created by the provider - just hand it back
+                    launchablesParams.add((InternalLaunchable) original);
+                } else if (original instanceof TaskListingLaunchable) {
+                    // A launchable synthesized by the consumer - unpack it into a set of task names
+                    taskPaths.addAll(((TaskListingLaunchable) original).getTaskNames());
+                } else if (launchable instanceof Task) {
+                    // A task created by a provider that does not understand launchables
+                    taskPaths.add(((Task) launchable).getPath());
+                } else {
+                    throw new GradleException("Only Task or TaskSelector instances are supported: "
+                            + (launchable != null ? launchable.getClass() : "null"));
+                }
+            }
+            this.launchables = launchablesParams;
+            tasks = Lists.newArrayList(taskPaths);
             return this;
         }
 
@@ -103,17 +140,19 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
         }
 
         public ConsumerOperationParameters build() {
-            return new ConsumerOperationParameters(parameters, stdout, stderr, stdin,
-                    javaHome, jvmArguments, arguments, tasks, launchables, progressListener);
+            return new ConsumerOperationParameters(parameters, stdout, stderr, colorOutput, stdin,
+                    javaHome, jvmArguments, arguments, tasks, launchables, progressListener, cancellationToken);
         }
     }
 
     private final ProgressListenerAdapter progressListener;
+    private final CancellationToken cancellationToken;
     private final ConnectionParameters parameters;
     private final long startTime = System.currentTimeMillis();
 
     private final OutputStream stdout;
     private final OutputStream stderr;
+    private final Boolean colorOutput;
     private final InputStream stdin;
 
     private final File javaHome;
@@ -122,12 +161,13 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
     private final List<String> tasks;
     private final List<InternalLaunchable> launchables;
 
-    private ConsumerOperationParameters(ConnectionParameters parameters, OutputStream stdout, OutputStream stderr, InputStream stdin,
+    private ConsumerOperationParameters(ConnectionParameters parameters, OutputStream stdout, OutputStream stderr, Boolean colorOutput, InputStream stdin,
                                         File javaHome, List<String> jvmArguments, List<String> arguments, List<String> tasks,
-                                        List<InternalLaunchable> launchables, ProgressListenerAdapter listener) {
+                                        List<InternalLaunchable> launchables, ProgressListenerAdapter listener, CancellationToken cancellationToken) {
         this.parameters = parameters;
         this.stdout = stdout;
         this.stderr = stderr;
+        this.colorOutput = colorOutput;
         this.stdin = stdin;
         this.javaHome = javaHome;
         this.jvmArguments = jvmArguments;
@@ -135,6 +175,7 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
         this.tasks = tasks;
         this.launchables = launchables;
         this.progressListener = listener;
+        this.cancellationToken = cancellationToken;
     }
 
     private static List<String> rationalizeInput(String[] arguments) {
@@ -148,6 +189,10 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
         if (!javaHome.isDirectory()) {
             throw new IllegalArgumentException("Supplied javaHome is not a valid folder. You supplied: " + javaHome);
         }
+    }
+
+    public BuildCancellationToken getCancellationToken() {
+        return ((CancellationTokenInternal) cancellationToken).getToken();
     }
 
     public long getStartTime() {
@@ -182,12 +227,20 @@ public class ConsumerOperationParameters implements BuildOperationParametersVers
         return parameters.getDaemonMaxIdleTimeValue();
     }
 
+    public File getDaemonBaseDir() {
+        return parameters.getDaemonBaseDir();
+    }
+
     public OutputStream getStandardOutput() {
         return stdout;
     }
 
     public OutputStream getStandardError() {
         return stderr;
+    }
+
+    public Boolean isColorOutput() {
+        return colorOutput;
     }
 
     public ProgressListenerVersion1 getProgressListener() {

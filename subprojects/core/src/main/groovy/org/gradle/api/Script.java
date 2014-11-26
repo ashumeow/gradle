@@ -26,6 +26,8 @@ import org.gradle.api.logging.LoggingManager;
 import org.gradle.api.resources.ResourceHandler;
 import org.gradle.api.tasks.WorkResult;
 import org.gradle.process.ExecResult;
+import org.gradle.process.ExecSpec;
+import org.gradle.process.JavaExecSpec;
 
 import java.io.File;
 import java.net.URI;
@@ -150,13 +152,6 @@ public interface Script {
      * <p>Creates a new {@code ConfigurableFileTree} using the given base directory. The given baseDir path is evaluated
      * as per {@link #file(Object)}.</p>
      * 
-     * <p><b>Note:</b> to use a closure as the baseDir, you must explicitly cast the closure to {@code Object} to force
-     * the use of this method instead of {@link #fileTree(Closure)}. Example:</p>
-     *
-     * <pre>
-     * fileTree((Object){ someDir })
-     * </pre>
-     *
      * <p>The returned file tree is lazy, so that it scans for files only when the contents of the file tree are
      * queried. The file tree is also live, so that it scans for files each time the contents of the file tree are
      * queried.</p>
@@ -180,25 +175,6 @@ public interface Script {
      * @return the configured file tree. Never returns null.
      */
     ConfigurableFileTree fileTree(Map<String, ?> args);
-
-    /**
-     * <p>Creates a new {@code ConfigurableFileTree} using the provided closure.  The closure will be used to configure
-     * the new file tree. The file tree is passed to the closure as its delegate.  Example:</p>
-     * <pre>
-     * fileTree {
-     *    from 'src'
-     *    exclude '**&#47;.svn/**'
-     * }.copy { into 'dest'}
-     * </pre>
-     * <p>The returned file tree is lazy, so that it scans for files only when the contents of the file tree are
-     * queried. The file tree is also live, so that it scans for files each time the contents of the file tree are
-     * queried.</p>
-     *
-     * @deprecated Use {@link #fileTree(Object,Closure)} instead.
-     * @param closure Closure to configure the {@code ConfigurableFileTree} object
-     * @return the configured file tree. Never returns null.
-     */
-    ConfigurableFileTree fileTree(Closure closure);
 
     /**
      * <p>Creates a new {@code ConfigurableFileTree} using the given base directory. The given baseDir path is evaluated
@@ -337,12 +313,28 @@ public interface Script {
     ExecResult javaexec(Closure closure);
 
     /**
+     * Executes a Java main class.
+     *
+     * @param action The action for configuring the execution.
+     * @return the result of the execution
+     */
+    ExecResult javaexec(Action<? super JavaExecSpec> action);
+
+    /**
      * Executes an external command. The closure configures a {@link org.gradle.process.ExecSpec}.
      *
      * @param closure The closure for configuring the execution.
      * @return the result of the execution
      */
     ExecResult exec(Closure closure);
+
+    /**
+     * Executes an external command.
+     *
+     * @param action The action for configuring the execution.
+     * @return the result of the execution
+     */
+    ExecResult exec(Action<? super ExecSpec> action);
 
     /**
      * Returns the {@link org.gradle.api.logging.LoggingManager} which can be used to control the logging level and

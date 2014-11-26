@@ -18,9 +18,13 @@ package org.gradle.integtests.tooling.fixture
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
 import org.gradle.integtests.fixtures.executer.GradleDistribution
 import org.gradle.integtests.fixtures.executer.IntegrationTestBuildContext
+import org.gradle.launcher.daemon.testing.DaemonLogsAnalyzer
+import org.gradle.launcher.daemon.testing.DaemonsFixture
 import org.gradle.test.fixtures.file.TestDirectoryProvider
+import org.gradle.test.fixtures.file.TestFile
 import org.gradle.tooling.GradleConnector
 import org.gradle.tooling.ProjectConnection
+import org.gradle.tooling.internal.consumer.DefaultGradleConnector
 import org.gradle.util.GradleVersion
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -32,21 +36,59 @@ class ToolingApi {
 
     private GradleDistribution dist
     private TestDirectoryProvider testWorkDirProvider
-    private File userHomeDir
+    private TestFile gradleUserHomeDir
+    private TestFile daemonBaseDir
+    private boolean useSeparateDaemonBaseDir
+    private boolean inProcess;
+    private boolean requiresDaemon
 
     private final List<Closure> connectorConfigurers = []
-    boolean isEmbedded
     boolean verboseLogging = LOGGER.debugEnabled
 
     ToolingApi(GradleDistribution dist, TestDirectoryProvider testWorkDirProvider) {
-        this(dist, new IntegrationTestBuildContext().gradleUserHomeDir, testWorkDirProvider, GradleContextualExecuter.embedded)
+        this.dist = dist
+        def context = new IntegrationTestBuildContext()
+        this.useSeparateDaemonBaseDir = dist.toolingApiDaemonBaseDirSupported && DefaultGradleConnector.metaClass.respondsTo(null, "daemonBaseDir")
+        this.gradleUserHomeDir = context.gradleUserHomeDir
+        this.daemonBaseDir = context.daemonBaseDir
+        this.requiresDaemon = !GradleContextualExecuter.embedded
+        this.inProcess = GradleContextualExecuter.embedded
+        this.testWorkDirProvider = testWorkDirProvider
     }
 
-    ToolingApi(GradleDistribution dist, File userHomeDir, TestDirectoryProvider testWorkDirProvider, boolean isEmbedded) {
-        this.dist = dist
-        this.userHomeDir = userHomeDir
-        this.testWorkDirProvider = testWorkDirProvider
-        this.isEmbedded = isEmbedded
+    /**
+     * Specifies that the test use its own Gradle user home dir and daemon registry.
+     */
+    void requireIsolatedUserHome() {
+        gradleUserHomeDir = testWorkDirProvider.testDirectory.file("user-home-dir")
+        useSeparateDaemonBaseDir = false
+    }
+
+    TestFile getDaemonBaseDir() {
+        return useSeparateDaemonBaseDir ? daemonBaseDir : gradleUserHomeDir.file("daemon")
+    }
+
+    /**
+     * Specifies that the test use real daemon processes (not embedded) and a test-specific daemon registry. Uses a shared Gradle user home dir
+     */
+    void requireIsolatedDaemons() {
+        if (useSeparateDaemonBaseDir) {
+            daemonBaseDir = testWorkDirProvider.testDirectory.file("daemons")
+        } else {
+            gradleUserHomeDir = testWorkDirProvider.testDirectory.file("user-home-dir")
+        }
+        requiresDaemon = true
+    }
+
+    /**
+     * Specifies that the test use real daemon processes (not embedded).
+     */
+    void requireDaemons() {
+        requiresDaemon = true
+    }
+
+    DaemonsFixture getDaemons() {
+        return DaemonLogsAnalyzer.newAnalyzer(getDaemonBaseDir(), dist.version.version)
     }
 
     void withConnector(Closure cl) {
@@ -94,20 +136,23 @@ class ToolingApi {
     }
 
     GradleConnector connector() {
-        GradleConnector connector = GradleConnector.newConnector()
-        connector.useGradleUserHomeDir(userHomeDir)
+        DefaultGradleConnector connector = GradleConnector.newConnector()
+        connector.useGradleUserHomeDir(new File(gradleUserHomeDir.path))
+        if (useSeparateDaemonBaseDir) {
+            connector.daemonBaseDir(new File(daemonBaseDir.path))
+        }
         connector.forProjectDirectory(testWorkDirProvider.testDirectory)
         connector.searchUpwards(false)
         connector.daemonMaxIdleTime(120, TimeUnit.SECONDS)
         if (connector.metaClass.hasProperty(connector, 'verboseLogging')) {
             connector.verboseLogging = verboseLogging
         }
-        if (isEmbedded) {
-            LOGGER.info("Using embedded tooling API provider");
+        if (!requiresDaemon && GradleVersion.current() == dist.version) {
+            println("Using embedded tooling API provider from ${GradleVersion.current().version} to classpath (${dist.version.version})")
             connector.useClasspathDistribution()
             connector.embedded(true)
         } else {
-            LOGGER.info("Using daemon tooling API provider");
+            println("Using daemon tooling API provider from ${GradleVersion.current().version} to ${dist.version.version}")
             connector.useInstallation(dist.gradleHomeDir.absoluteFile)
             connector.embedded(false)
         }

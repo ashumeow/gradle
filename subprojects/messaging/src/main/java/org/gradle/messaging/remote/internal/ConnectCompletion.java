@@ -26,12 +26,12 @@ public interface ConnectCompletion {
      *
      * @param messageClassLoader The ClassLoader to use to deserialize incoming messages.
      */
-    <T> Connection<T> create(ClassLoader messageClassLoader);
+    <T> RemoteConnection<T> create(ClassLoader messageClassLoader);
 
     /**
      * Creates the connection. Uses the specified serializer for all messages.
      *
      * @return The serializer to use.
      */
-    <T> Connection<T> create(MessageSerializer<T> serializer);
+    <T> RemoteConnection<T> create(MessageSerializer<T> serializer);
 }

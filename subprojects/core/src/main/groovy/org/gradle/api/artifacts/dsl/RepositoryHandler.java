@@ -16,7 +16,6 @@
 package org.gradle.api.artifacts.dsl;
 
 import groovy.lang.Closure;
-import org.apache.ivy.plugins.resolver.DependencyResolver;
 import org.gradle.api.Action;
 import org.gradle.api.artifacts.ArtifactRepositoryContainer;
 import org.gradle.api.artifacts.repositories.FlatDirectoryArtifactRepository;
@@ -84,8 +83,8 @@ public interface RepositoryHandler extends ArtifactRepositoryContainer {
     /**
      * Adds a repository which looks in Bintray's JCenter repository for dependencies.
      * <p>
-     * The URL used to access this repository is {@literal "http://jcenter.bintray.com/"}.
-     * The behavior of this resolver is otherwise the same as the ones added by {@link #maven(org.gradle.api.Action)}.
+     * The URL used to access this repository is {@literal "https://jcenter.bintray.com/"}.
+     * The behavior of this repository is otherwise the same as those added by {@link #maven(org.gradle.api.Action)}.
      * <p>
      * Examples:
      * <pre autoTested="">
@@ -108,8 +107,8 @@ public interface RepositoryHandler extends ArtifactRepositoryContainer {
     /**
      * Adds a repository which looks in Bintray's JCenter repository for dependencies.
      * <p>
-     * The URL used to access this repository is {@literal "http://jcenter.bintray.com/"}.
-     * The behavior of this resolver is otherwise the same as the ones added by {@link #mavenCentral()}.
+     * The URL used to access this repository is {@literal "https://jcenter.bintray.com/"}.
+     * The behavior of this repository is otherwise the same as those added by {@link #maven(org.gradle.api.Action)}.
      * <p>
      * Examples:
      * <pre autoTested="">
@@ -125,10 +124,9 @@ public interface RepositoryHandler extends ArtifactRepositoryContainer {
 
     /**
      * Adds a repository which looks in the Maven central repository for dependencies. The URL used to access this repository is
-     * {@value org.gradle.api.artifacts.ArtifactRepositoryContainer#MAVEN_CENTRAL_URL}. The behavior of this resolver
-     * is otherwise the same as the ones added by {@link #mavenRepo(java.util.Map)}.
+     * {@value org.gradle.api.artifacts.ArtifactRepositoryContainer#MAVEN_CENTRAL_URL}.
      *
-     * The following parameter are accepted as keys for the map:
+     * <p>The following parameter are accepted as keys for the map:
      *
      * <table summary="Shows property keys and associated values">
      * <tr><th>Key</th>
@@ -187,76 +185,22 @@ public interface RepositoryHandler extends ArtifactRepositoryContainer {
      * }
      * </pre>
      * </p>
+     * <p>
+     * The location for the repository is determined as follows (in order of precedence):
+     * <ol>
+     * <li>The value of system property 'maven.repo.path' if set;</li>
+     * <li>The value of element &lt;localRepository&gt; of <code>~/.m2/settings.xml</code> if this file exists and element is set;</li>
+     * <li>The value of element &lt;localRepository&gt; of <code>$M2_HOME/conf/settings.xml</code> (where <code>$M2_HOME</code> is the value of the environment variable with that name) if this file exists and element is set;</li>
+     * <li>The path <code>~/.m2/repository</code>.</li>
+     * </ol>
+     * </p>
      *
      * @return the added resolver
      */
     MavenArtifactRepository mavenLocal();
 
     /**
-     * Adds a repository which is Maven compatible. The compatibility is in regard to layout, snapshot handling and
-     * dealing with the pom.xml. This repository can't be used for publishing in a Maven compatible way. For publishing
-     * to a Maven repository, have a look at {@link org.gradle.api.plugins.MavenRepositoryHandlerConvention#mavenDeployer(java.util.Map)} or
-     * {@link org.gradle.api.plugins.MavenRepositoryHandlerConvention#mavenInstaller(java.util.Map)}.
-     *
-     * By default the repository accepts to resolve artifacts without a POM. The repository always looks first for the POM
-     * in the root repository. It then looks for the artifact in the root repository. Sometimes the artifact
-     * lives in a different repository than the POM. In such a case you can specify further locations to look for an artifact.
-     * But be aware that the POM is only looked up in the root repository.
-     *
-     * The following parameter are accepted as keys for the map:
-     *
-     * <table summary="Shows property keys and associated values">
-     * <tr><th>Key</th>
-     *     <th>Description of Associated Value</th></tr>
-     * <tr><td><code>name</code></td>
-     *     <td><em>(optional)</em> The name of the repository. The default is the URL of the root repo.
-     * The name is used in the console output,
-     * to point to information related to a particular repository. A name must be unique amongst a repository group.
-     * </td></tr>
-     * <tr><td><code>url</code></td>
-     *     <td>The root repository where POM files and artifacts are located.
-     * The provided values are evaluated as per {@link org.gradle.api.Project#uri(Object)}.</td></tr>
-     * <tr><td><code>artifactUrls</code></td>
-     *     <td>A single jar repository or a collection of jar repositories containing additional artifacts not found in the root repository. Sometimes the artifact
-     * lives in a different repository than the POM. In such a case you can specify further locations to look for an artifact.
-     * But be aware that the POM is only looked up in the root repository.
-     * The provided values are evaluated as per {@link org.gradle.api.Project#uri(Object)}.</td></tr>
-     * </table>
-     *
-     * <p>Examples:
-     * <pre>
-     * repositories {
-     *     mavenRepo url: "http://www.mycompany.com/repository", artifactUrls: ["http://www.mycompany.com/artifacts1", "http://www.mycompany.com/artifacts2"]
-     *     mavenRepo name: "nonDefaultName", url: "http://www.mycompany.com/repository"
-     * }
-     * </pre>
-     * </p>
-     *
-     * For Ivy related reasons, Maven Snapshot dependencies are only properly resolved if no additional jar locations
-     * are specified. This is unfortunate and we hope to improve this in a future release.
-     *
-     * @param args The argument to create the repository
-     * @return the added repository
-     * @deprecated Use {@link #maven(groovy.lang.Closure)} instead.
-     */
-    @SuppressWarnings("JavadocReference")
-    @Deprecated
-    DependencyResolver mavenRepo(Map<String, ?> args);
-
-    /**
-     * Adds a repository which is Maven compatible.
-     *
-     * @param args The argument to create the repository
-     * @param configClosure Further configuration of the dependency resolver
-     * @return The created dependency resolver
-     * @see #mavenRepo(java.util.Map)
-     * @deprecated Use {@link #maven(groovy.lang.Closure)} instead.
-     */
-    @Deprecated
-    DependencyResolver mavenRepo(Map<String, ?> args, Closure configClosure);
-
-    /**
-     * Adds and configures a Maven repository.
+     * Adds and configures a Maven repository. Newly created instance of {@code MavenArtifactRepository} is passed as an argument to the closure.
      *
      * @param closure The closure to use to configure the repository.
      * @return The added repository.
@@ -272,7 +216,7 @@ public interface RepositoryHandler extends ArtifactRepositoryContainer {
     MavenArtifactRepository maven(Action<? super MavenArtifactRepository> action);
 
     /**
-     * Adds and configures an Ivy repository.
+     * Adds and configures an Ivy repository. Newly created instance of {@code IvyArtifactRepository} is passed as an argument to the closure.
      *
      * @param closure The closure to use to configure the repository.
      * @return The added repository.

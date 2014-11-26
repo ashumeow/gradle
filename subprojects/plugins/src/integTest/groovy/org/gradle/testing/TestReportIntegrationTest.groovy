@@ -39,11 +39,11 @@ public class LoggingTest {
     @org.junit.Test
     public void test() {
         if (System.getProperty("LogLessStuff", "false").equals("true")) {
-            System.out.print("stdout.");
-            System.err.print("stderr.");
+            System.out.println("stdout.");
+            System.err.println("stderr.");
         } else {
-            System.out.print("This is stdout.");
-            System.err.print("This is stderr.");
+            System.out.println("This is stdout.");
+            System.err.println("This is stderr.");
         }
     }
 }
@@ -54,16 +54,16 @@ public class LoggingTest {
 
         then:
         def result = new HtmlTestExecutionResult(testDirectory)
-        result.testClass("LoggingTest").assertStdout(equalTo("This is stdout."))
-        result.testClass("LoggingTest").assertStderr(equalTo("This is stderr."))
+        result.testClass("LoggingTest").assertStdout(equalTo("This is stdout.\n"))
+        result.testClass("LoggingTest").assertStderr(equalTo("This is stderr.\n"))
 
         when:
         executer.withArguments("-DLogLessStuff=true")
         run "test"
 
         then:
-        result.testClass("LoggingTest").assertStdout(equalTo("stdout."))
-        result.testClass("LoggingTest").assertStderr(equalTo("stderr."))
+        result.testClass("LoggingTest").assertStdout(equalTo("stdout.\n"))
+        result.testClass("LoggingTest").assertStderr(equalTo("stderr.\n"))
     }
 
     @UsesSample("testing/testReport")
@@ -140,11 +140,11 @@ public class SuperTest {
 $testFilePrelude
 public class SubTest {
     @Category(SubClassTests.class) @Test public void onlySub() {
-        System.out.println("org.gradle.testing.SubTest#onlySub");
+        System.out.println("org.gradle.testing.SubTest#onlySub " + System.getProperty("category"));
         assertEquals("sub", System.getProperty("category"));
     }
     @Category(SubClassTests.class) @Test public void passing() {
-        System.out.println("org.gradle.testing.SubTest#passing");
+        System.out.println("org.gradle.testing.SubTest#passing " + System.getProperty("category"));
     }
 }
 """
@@ -169,10 +169,13 @@ public class SubClassTests extends SuperClassTests {
                 .assertTestFailed("failing", equalTo('java.lang.AssertionError: failing test'))
                 .assertStdout(allOf(containsString('org.gradle.testing.SuperTest#failing\n'), containsString('org.gradle.testing.SuperTest#passing\n')))
         htmlReport.testClass("org.gradle.testing.SubTest").assertTestCount(4, 1, 0).assertTestPassed("passing") // onlySub is passing once and failing once
-                .assertStdout(allOf(containsString('org.gradle.testing.SubTest#passing\n'), containsString('org.gradle.testing.SubTest#onlySub\n')))
+                .assertStdout(allOf(containsString('org.gradle.testing.SubTest#passing sub\n'),
+                        containsString('org.gradle.testing.SubTest#passing super\n'),
+                        containsString('org.gradle.testing.SubTest#onlySub sub\n'),
+                        containsString('org.gradle.testing.SubTest#onlySub super\n')))
     }
 
-    @Issue("http://issues.gradle.org//browse/GRADLE-2821")
+    @Issue("https://issues.gradle.org//browse/GRADLE-2821")
     def "test report task can handle test tasks that did not run tests"() {
         given:
         buildScript """
@@ -204,7 +207,7 @@ public class SubClassTests extends SuperClassTests {
         new HtmlTestExecutionResult(testDirectory, "build/reports/tr").assertTestClassesExecuted("Thing")
     }
 
-    @Issue("http://issues.gradle.org//browse/GRADLE-2915")
+    @Issue("https://issues.gradle.org//browse/GRADLE-2915")
     def "test report task can handle tests tasks not having been executed"() {
         when:
         buildScript """

@@ -65,12 +65,8 @@ public class TestReportDataCollector implements TestListener, TestOutputListener
     public void afterTest(TestDescriptor testDescriptor, TestResult result) {
         String className = testDescriptor.getClassName();
         TestMethodResult methodResult = currentTestMethods.remove(testDescriptor).completed(result);
-        if (result.getResultType() == TestResult.ResultType.SKIPPED) {
-            methodResult.setIgnored();
-        } else {
-            for (Throwable throwable : result.getExceptions()) {
-                methodResult.addFailure(failureMessage(throwable), stackTrace(throwable), exceptionClassName(throwable));
-            }
+        for (Throwable throwable : result.getExceptions()) {
+            methodResult.addFailure(failureMessage(throwable), stackTrace(throwable), exceptionClassName(throwable));
         }
         TestClassResult classResult = results.get(className);
         if (classResult == null) {
@@ -118,6 +114,10 @@ public class TestReportDataCollector implements TestListener, TestOutputListener
         if (className == null) {
             //this means that we receive an output before even starting any class (or too late).
             //we don't have a place for such output in any of the reports so skipping.
+            //Unfortunately, this happens pretty often with current level of TestNG support
+            //because output events emitted by constructor, beforeTest, beforeClass
+            // are sent before test start event is started and there is no parent class event emitted by TestNG.
+            //In short, the TestNG support could be better. See also TestNGOutputEventsIntegrationTest
             return;
         }
         TestClassResult classResult = results.get(className);

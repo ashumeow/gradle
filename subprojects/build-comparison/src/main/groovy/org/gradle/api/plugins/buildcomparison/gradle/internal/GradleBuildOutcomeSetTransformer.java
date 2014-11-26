@@ -17,7 +17,7 @@
 package org.gradle.api.plugins.buildcomparison.gradle.internal;
 
 import org.gradle.api.Transformer;
-import org.gradle.internal.filestore.FileStore;
+import org.gradle.internal.resource.local.FileStore;
 import org.gradle.api.plugins.buildcomparison.outcome.internal.BuildOutcome;
 import org.gradle.api.plugins.buildcomparison.outcome.internal.archive.GeneratedArchiveBuildOutcome;
 import org.gradle.api.plugins.buildcomparison.outcome.internal.unknown.UnknownBuildOutcome;
@@ -33,6 +33,8 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import static org.apache.commons.lang.StringUtils.isEmpty;
 
 /**
  * Transforms from the Gradle specific build outcomes into source agnostic outcomes.
@@ -88,7 +90,11 @@ public class GradleBuildOutcomeSetTransformer implements Transformer<Set<BuildOu
             BuildOutcome buildOutcome = new GeneratedArchiveBuildOutcome(outcome.getTaskPath(), outcome.getDescription(), resource, relativePath);
             translatedOutcomes.add(buildOutcome);
         } else {
-            translatedOutcomes.add(new UnknownBuildOutcome(outcome.getTaskPath(), outcome.getDescription()));
+            String outcomeName = outcome.getTaskPath();
+            if (isEmpty(outcomeName)) {
+                outcomeName = GFileUtils.relativePath(rootProject.getProjectDirectory(), outcome.getFile());
+            }
+            translatedOutcomes.add(new UnknownBuildOutcome(outcomeName, outcome.getDescription()));
         }
     }
 

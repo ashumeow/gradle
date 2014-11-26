@@ -425,7 +425,8 @@ public class CopyTaskIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @Ignore //this does not pass with current implementation
+    @Ignore
+    //this does not pass with current implementation
     public void testIncludeExcludeWithCopyspec() {
         TestFile buildFile = testFile("build.gradle").writelns(
                 """
@@ -597,7 +598,31 @@ public class CopyTaskIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    public void testChainMatchingRules() {
+    public void testEachChainedMatchingRuleAlwaysMatchesAgainstInitialSourcePath() {
+        file('path/abc.txt').createFile().write('test file with $attr')
+        file('path/bcd.txt').createFile()
+
+        def buildFile = testFile('build.gradle') <<
+                '''
+            task copy(type: Copy) {
+                from 'path'
+                into 'dest'
+                filesMatching ('**/a*') {
+                    path = path + '.template'
+                }
+                filesMatching ('**/a*') {
+                    expand(attr: 'some value')
+                    path = path.replace('template', 'concrete')
+                }
+            }'''
+
+        usingBuildFile(buildFile).withTasks('copy').run();
+        file('dest').assertHasDescendants('bcd.txt', 'abc.txt.concrete')
+        file('dest/abc.txt.concrete').text = 'test file with some value'
+    }
+
+    @Test
+    public void testChainedMatchingRulesDoNotMatchAgainstDestinationPathSetByPreviousChainElement() {
         file('path/abc.txt').createFile().write('test file with $attr')
         file('path/bcd.txt').createFile()
 
@@ -616,7 +641,67 @@ public class CopyTaskIntegrationTest extends AbstractIntegrationTest {
             }'''
 
         usingBuildFile(buildFile).withTasks('copy').run();
-        file('dest').assertHasDescendants('bcd.txt', 'abc.txt.concrete')
-        file('dest/abc.txt.concrete').text = 'test file with some value'
+        file('dest').assertHasDescendants('bcd.txt', 'abc.txt.template')
+        file('dest/abc.txt.template').text = 'test file with some $attr'
+    }
+
+    @Test
+    public void testAccessSourceNameFromFileCopyDetails() {
+        file('path/abc.txt').createFile().write('content')
+        file('path/bcd.txt').createFile()
+
+        def buildFile = testFile('build.gradle') <<
+                '''
+            task copy(type: Copy) {
+                from 'path'
+                into 'dest'
+                filesMatching ('**/a*') {
+                    name = "DEST-" + sourceName
+                }
+            }'''
+
+        usingBuildFile(buildFile).withTasks('copy').run();
+        file('dest').assertHasDescendants('bcd.txt', 'DEST-abc.txt')
+        file('dest/DEST-abc.txt').text = 'content'
+    }
+
+    @Test
+    public void testAccessSourcePathFromFileCopyDetails() {
+        file('path/abc.txt').createFile().write('content')
+        file('path/bcd.txt').createFile()
+
+        def buildFile = testFile('build.gradle') <<
+                '''
+            task copy(type: Copy) {
+                from 'path'
+                into 'dest'
+                filesMatching ('**/a*') {
+                    path = sourcePath.replace('txt', 'log')
+                }
+            }'''
+
+        usingBuildFile(buildFile).withTasks('copy').run();
+        file('dest').assertHasDescendants('bcd.txt', 'abc.log')
+        file('dest/abc.log').text = 'content'
+    }
+
+    @Test
+    public void testAccessRelativeSourcePathFromFileCopyDetails() {
+        file('path/abc.txt').createFile().write('content')
+        file('path/bcd.txt').createFile()
+
+        def buildFile = testFile('build.gradle') <<
+                '''
+            task copy(type: Copy) {
+                from 'path'
+                into 'dest'
+                filesMatching ('**/a*') {
+                    relativePath = relativeSourcePath.replaceLastName('abc.log')
+                }
+            }'''
+
+        usingBuildFile(buildFile).withTasks('copy').run();
+        file('dest').assertHasDescendants('bcd.txt', 'abc.log')
+        file('dest/abc.log').text = 'content'
     }
 }

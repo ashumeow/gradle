@@ -38,7 +38,9 @@ class ToolingApiCompatibilitySuiteRunner extends AbstractCompatibilityTestRunner
     protected void createExecutions() {
         def resolver = new ToolingApiDistributionResolver().withDefaultRepository()
         try {
-            add(new Permutation(resolver.resolve(current.version.version), current))
+            if (implicitVersion) {
+                add(new Permutation(resolver.resolve(current.version.version), current))
+            }
             previous.each {
                 if (it.toolingApiSupported) {
                     add(new Permutation(resolver.resolve(current.version.version), it))
@@ -136,8 +138,10 @@ class ToolingApiCompatibilitySuiteRunner extends AbstractCompatibilityTestRunner
             sharedClassLoader.allowPackage('spock')
             sharedClassLoader.allowPackage('org.spockframework')
             sharedClassLoader.allowClass(SetSystemProperties)
+            sharedClassLoader.allowClass(RedirectStdOutAndErr)
             sharedClassLoader.allowPackage('org.gradle.integtests.fixtures')
             sharedClassLoader.allowPackage('org.gradle.test.fixtures')
+            sharedClassLoader.allowPackage('org.gradle.launcher.daemon.testing')
             sharedClassLoader.allowClass(OperatingSystem)
             sharedClassLoader.allowClass(Requires)
             sharedClassLoader.allowClass(TestPrecondition)
@@ -149,6 +153,7 @@ class ToolingApiCompatibilitySuiteRunner extends AbstractCompatibilityTestRunner
 
             def testClassPath = []
             testClassPath << ClasspathUtil.getClasspathForClass(target)
+            testClassPath << ClasspathUtil.getClasspathForClass(TestResultHandler)
 
             return new MutableURLClassLoader(parentClassLoader, testClassPath.collect { it.toURI().toURL() })
         }

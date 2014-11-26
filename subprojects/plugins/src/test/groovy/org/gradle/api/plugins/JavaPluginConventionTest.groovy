@@ -44,13 +44,12 @@ class JavaPluginConventionTest {
     public final TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider()
 
     @Before public void setUp() {
-        project.plugins.apply(ReportingBasePlugin)
+        project.pluginManager.apply(ReportingBasePlugin)
         convention = new JavaPluginConvention(project, instantiator)
     }
 
     @Test public void defaultValues() {
         assertThat(convention.sourceSets, instanceOf(DefaultSourceSetContainer))
-        assertThat(convention.manifest, notNullValue())
         assertEquals('dependency-cache', convention.dependencyCacheDirName)
         assertEquals('docs', convention.docsDirName)
         assertEquals('test-results', convention.testResultsDirName)
@@ -92,10 +91,10 @@ class JavaPluginConventionTest {
     @Test public void testTestReportDirIsCalculatedRelativeToReportsDir() {
         assertEquals(new File(project.buildDir, 'reports/tests'), convention.testReportDir)
 
-        project.reportsDirName = 'other-reports-dir'
+        project.reporting.baseDir = 'other-reports-dir'
         convention.testReportDirName = 'other-test-dir'
 
-        assertEquals(new File(project.buildDir, 'other-reports-dir/other-test-dir'), convention.testReportDir)
+        assertEquals(new File(project.projectDir, 'other-reports-dir/other-test-dir'), convention.testReportDir)
     }
 
     @Test public void testTargetCompatibilityDefaultsToSourceCompatibilityWhenNotSet() {

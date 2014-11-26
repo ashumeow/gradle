@@ -17,6 +17,8 @@ package org.gradle.launcher.daemon.server.exec;
 
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
+import org.gradle.launcher.daemon.server.api.DaemonCommandAction;
+import org.gradle.launcher.daemon.server.api.DaemonCommandExecution;
 
 public class WatchForDisconnection implements DaemonCommandAction {
 
@@ -27,13 +29,6 @@ public class WatchForDisconnection implements DaemonCommandAction {
         execution.getConnection().onDisconnect(new Runnable() {
             public void run() {
                 LOGGER.warn("client disconnection detected, stopping the daemon");
-                
-                /*
-                    When the daemon was started through the DaemonMain entry point, this will cause the entire
-                    JVM to exit with code 1 (which is what we want) because the call to requestStopOnIdleTimeout() in
-                    DaemonMain#doAction will throw a DaemonStoppedException. Note that at this point we will also 
-                    immediately remove the daemon from the registry.
-                */
                 execution.getDaemonStateControl().requestForcefulStop();
             }
         });

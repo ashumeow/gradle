@@ -19,20 +19,24 @@ apply plugin: 'c'
 // END SNIPPET apply-plugin
 
 // START SNIPPET libraries
-libraries {
-    hello {}
+model {
+    components {
+        hello(NativeLibrarySpec)
+    }
 }
 // END SNIPPET libraries
 
 // START SNIPPET executables
-executables {
-    main {}
+model {
+    components {
+        main(NativeExecutableSpec) {
+            sources {
+               c.lib library: "hello"
+            }
+        }
+    }
 }
 // END SNIPPET executables
-
-// START SNIPPET source-library
-sources.main.c.lib libraries.hello
-// END SNIPPET source-library
 
 // START SNIPPET compiler-args
 binaries.all {
@@ -49,8 +53,9 @@ binaries.all {
 // END SNIPPET compiler-args
 
 // START SNIPPET all-shared-libraries
-// For any shared library binaries built with Visual C++, define the DLL_EXPORT macro
-binaries.withType(SharedLibraryBinary) {
+// For any shared library binaries built with Visual C++,
+// define the DLL_EXPORT macro
+binaries.withType(SharedLibraryBinarySpec) {
     if (toolChain in VisualCpp) {
         cCompiler.args "/Zi"
         cCompiler.define "DLL_EXPORT"

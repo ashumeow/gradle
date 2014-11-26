@@ -15,6 +15,8 @@
  */
 
 package org.gradle.api.publish.ivy.internal.publisher
+
+import javax.xml.namespace.QName
 import org.gradle.api.Action
 import org.gradle.api.XmlProvider
 import org.gradle.api.artifacts.DependencyArtifact
@@ -48,6 +50,7 @@ class IvyDescriptorFileGeneratorTest extends Specification {
             info.@module == "my-name"
             info.@revision == "my-version"
             info.@status.isEmpty()
+            info.@branch.isEmpty()
             configurations.size() == 1
             configurations.conf.isEmpty()
             publications.size() == 1
@@ -77,6 +80,27 @@ class IvyDescriptorFileGeneratorTest extends Specification {
 
         then:
         ivyXml.info.@status == "my-status"
+    }
+
+    def "writes supplied branch"() {
+        when:
+        generator.setBranch("someBranch")
+
+        then:
+        ivyXml.info.@branch == "someBranch"
+    }
+
+    def "writes supplied extra info elements" () {
+        when:
+        generator.setExtraInfo([(ns('foo')): 'fooValue', (ns('bar')): 'barValue'])
+
+        then:
+        ivyXml.info."foo".size() == 1
+        ivyXml.info."foo"[0].namespaceURI() == ns('foo').namespaceURI
+        ivyXml.info."foo"[0].text() == 'fooValue'
+        ivyXml.info."bar".size() == 1
+        ivyXml.info."bar"[0].namespaceURI() == ns('bar').namespaceURI
+        ivyXml.info."bar"[0].text() == 'barValue'
     }
 
     def "writes supplied configurations"() {
@@ -119,18 +143,19 @@ class IvyDescriptorFileGeneratorTest extends Specification {
                 it.@name == "artifact1"
                 it.@type == "type1"
                 it.@ext == "ext1"
-                it.@classifier == "classy"
+                it."@m:classifier" == "classy"
                 it.@conf.isEmpty()
             }
             with (publications[0].artifact[1]) {
                 it.@name.isEmpty()
                 it.@type.isEmpty()
                 it.@ext == ""
-                it.@classifier.isEmpty()
+                it."@m:classifier".isEmpty()
                 it.@conf == "runtime"
             }
         }
     }
+
     def "writes supplied dependencies"() {
         when:
         generator.addDependency(new DefaultIvyDependency('dep-group', 'dep-name-1', 'dep-version', "confMappingProject"))
@@ -187,13 +212,13 @@ class IvyDescriptorFileGeneratorTest extends Specification {
                     it.@name == "artifact-1"
                     it.@type == "type-1"
                     it.@ext == "ext-1"
-                    it.@classifier.isEmpty()
+                    it."@m:classifier".isEmpty()
                 }
                 with (artifact[1]) {
                     it.@name == "artifact-2"
                     it.@type.isEmpty()
                     it.@ext.isEmpty()
-                    it.@classifier == "classy"
+                    it."@m:classifier" == "classy"
                 }
             }
         }
@@ -235,5 +260,9 @@ class IvyDescriptorFileGeneratorTest extends Specification {
         def ivyFile = testDirectoryProvider.testDirectory.file("ivy.xml")
         generator.writeTo(ivyFile)
         return ivyFile
+    }
+
+    private QName ns(String name) {
+        return new QName("http://my.extra.info/${name}", name)
     }
 }

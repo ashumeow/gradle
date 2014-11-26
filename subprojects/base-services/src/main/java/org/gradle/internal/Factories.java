@@ -32,4 +32,8 @@ public abstract class Factories {
             }
         };
     }
+
+    public static <T> Factory<T> constantNull() {
+        return constant(null);
+    }
 }

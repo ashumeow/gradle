@@ -50,6 +50,8 @@ public interface ProviderOperationParameters {
 
     Boolean isEmbedded();
 
+    Boolean isColorOutput(Boolean defaultValue);
+
     OutputStream getStandardOutput();
 
     OutputStream getStandardError();
@@ -58,11 +60,13 @@ public interface ProviderOperationParameters {
 
     TimeUnit getDaemonMaxIdleTimeUnits();
 
+    File getDaemonBaseDir(File defaultDaemonBaseDir);
+
     ProgressListenerVersion1 getProgressListener();
 
     List<String> getArguments(List<String> defaultArguments);
 
     List<String> getTasks();
 
-    List<InternalLaunchable> getLaunchables();
+    List<InternalLaunchable> getLaunchables(List<InternalLaunchable> defaultLaunchables);
 }

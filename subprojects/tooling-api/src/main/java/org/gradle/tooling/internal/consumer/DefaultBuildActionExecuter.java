@@ -16,7 +16,10 @@
 
 package org.gradle.tooling.internal.consumer;
 
-import org.gradle.tooling.*;
+import org.gradle.tooling.BuildAction;
+import org.gradle.tooling.BuildActionExecuter;
+import org.gradle.tooling.GradleConnectionException;
+import org.gradle.tooling.ResultHandler;
 import org.gradle.tooling.internal.consumer.async.AsyncConsumerActionExecutor;
 import org.gradle.tooling.internal.consumer.connection.ConsumerAction;
 import org.gradle.tooling.internal.consumer.connection.ConsumerConnection;

@@ -8,7 +8,7 @@ sourceCompatibility = 1.5
 targetCompatibility = 1.5
 
 ext {
-    compileTasks = tasks.matching { it instanceof Compile || it instanceof GroovyCompile }
+    compileTasks = tasks.matching { it instanceof JavaCompile || it instanceof GroovyCompile }
     testTasks = tasks.withType(Test)
     generatedResourcesDir = file("$buildDir/generated-resources/main")
     generatedTestResourcesDir = file("$buildDir/generated-resources/test")
@@ -42,7 +42,9 @@ if (!javaVersion.java7) {
 }
 
 testTasks.all { task ->
-    maxParallelForks = rootProject.maxParallelForks
+    if (isCiServer) {
+        maxParallelForks = rootProject.maxParallelForks
+    }
     if (isCiServer) {
         doFirst {
             println "maxParallelForks for '$task.path' is $task.maxParallelForks"

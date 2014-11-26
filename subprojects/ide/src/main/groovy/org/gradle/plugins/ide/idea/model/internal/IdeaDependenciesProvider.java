@@ -19,13 +19,9 @@ package org.gradle.plugins.ide.idea.model.internal;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.LinkedHashMultimap;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Multimap;
+import com.google.common.collect.*;
 import org.gradle.api.Nullable;
 import org.gradle.api.artifacts.Configuration;
-import org.gradle.api.file.FileCollection;
 import org.gradle.plugins.ide.idea.model.Dependency;
 import org.gradle.plugins.ide.idea.model.FilePath;
 import org.gradle.plugins.ide.idea.model.IdeaModule;
@@ -37,14 +33,7 @@ import org.gradle.plugins.ide.internal.resolver.model.IdeLocalFileDependency;
 import org.gradle.plugins.ide.internal.resolver.model.IdeProjectDependency;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public class IdeaDependenciesProvider {
 
@@ -89,7 +78,7 @@ public class IdeaDependenciesProvider {
 
         Set<Dependency> result = new LinkedHashSet<Dependency>();
         if (ideaModule.getSingleEntryLibraries() != null) {
-            for (Map.Entry<String, FileCollection> singleEntryLibrary : ideaModule.getSingleEntryLibraries().entrySet()) {
+            for (Map.Entry<String, Iterable<File>> singleEntryLibrary : ideaModule.getSingleEntryLibraries().entrySet()) {
                 String scope = singleEntryLibrary.getKey();
                 for (File file : singleEntryLibrary.getValue()) {
                     if (file != null && file.isDirectory()) {
@@ -104,10 +93,7 @@ public class IdeaDependenciesProvider {
 
     private Set<Dependency> provideFromScopeRuleMappings(IdeaModule ideaModule) {
         Multimap<IdeDependencyKey<?, Dependency>, String> dependencyToConfigurations = LinkedHashMultimap.create();
-        for (Configuration configuration : ideaModule.getProject().getConfigurations()) {
-            if (!isMappedToIdeaScope(configuration, ideaModule)) {
-                continue;
-            }
+        for (Configuration configuration : ideaConfigurations(ideaModule)) {
             // project dependencies
             Collection<IdeProjectDependency> ideProjectDependencies = dependenciesExtractor.extractProjectDependencies(
                     ideaModule.getProject(), Collections.singletonList(configuration), Collections.<Configuration>emptyList());
@@ -156,9 +142,13 @@ public class IdeaDependenciesProvider {
         for (GeneratedIdeaScope scope : GeneratedIdeaScope.values()) {
             Map<String, Collection<Configuration>> plusMinusConfigurations = ideaModule.getScopes().get(scope.name());
             if (plusMinusConfigurations == null) {
-                continue;
+                if (shouldProcessScope(scope, ideaModule.getScopes())) {
+                    plusMinusConfigurations = Collections.emptyMap();
+                } else {
+                    continue;
+                }
             }
-            Collection<Configuration> minusConfigurations = plusMinusConfigurations != null ? plusMinusConfigurations.get("minus") : null;
+            Collection<Configuration> minusConfigurations = plusMinusConfigurations.get("minus");
             Collection<String> minusConfigurationNames = minusConfigurations != null
                     ? Lists.newArrayList(Iterables.transform(
                             minusConfigurations,
@@ -179,7 +169,7 @@ public class IdeaDependenciesProvider {
                             scopeToDependency(dependencyKey))));
                 }
             }
-            if (plusMinusConfigurations != null && plusMinusConfigurations.containsKey("plus")) {
+            if (plusMinusConfigurations.containsKey("plus")) {
                 for (Configuration plusConfiguration : plusMinusConfigurations.get("plus")) {
                     Collection<IdeDependencyKey<?, Dependency>> matchingDependencies =
                             extractDependencies(dependencyToConfigurations, Collections.singletonList(plusConfiguration.getName()), minusConfigurationNames);
@@ -194,6 +184,16 @@ public class IdeaDependenciesProvider {
         return dependencies;
     }
 
+    private boolean shouldProcessScope(GeneratedIdeaScope scope, Map<String, Map<String, Collection<Configuration>>> scopes) {
+        // composite scopes are not present in IdeaModule.scopes - check their mapped scope names
+        for (String scopeName : scope.scopes) {
+            if (!scopes.containsKey(scopeName)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static Function<String, Dependency> scopeToDependency(final IdeDependencyKey<?, Dependency> dependencyKey) {
         return new Function<String, Dependency>() {
             @Nullable
@@ -203,8 +203,23 @@ public class IdeaDependenciesProvider {
         };
     }
 
+    private Iterable<Configuration> ideaConfigurations(final IdeaModule ideaModule) {
+        Set<Configuration> configurations = Sets.newHashSet(ideaModule.getProject().getConfigurations());
+        for (Map<String, Collection<Configuration>> scopeMap : ideaModule.getScopes().values()) {
+            for (Configuration cfg : Iterables.concat(scopeMap.values())) {
+                configurations.add(cfg);
+            }
+        }
+        return Iterables.filter(
+                configurations,
+                new Predicate<Configuration>() {
+                    public boolean apply(Configuration input) {
+                        return isMappedToIdeaScope(input, ideaModule);
+                    }
+                });
+    }
 
-    boolean isMappedToIdeaScope(final Configuration configuration, IdeaModule ideaModule) {
+    private boolean isMappedToIdeaScope(final Configuration configuration, IdeaModule ideaModule) {
         Iterable<IdeaScopeMappingRule> rules = Iterables.concat(scopeMappings.values());
         boolean matchesRule = Iterables.any(rules, new Predicate<IdeaScopeMappingRule>() {
             public boolean apply(IdeaScopeMappingRule ideaScopeMappingRule) {

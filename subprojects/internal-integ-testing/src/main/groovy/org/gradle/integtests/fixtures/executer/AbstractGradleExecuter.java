@@ -18,6 +18,7 @@ package org.gradle.integtests.fixtures.executer;
 import groovy.lang.Closure;
 import org.gradle.api.Action;
 import org.gradle.api.internal.ClosureBackedAction;
+import org.gradle.api.internal.initialization.loadercache.ClassLoaderCacheFactory;
 import org.gradle.api.internal.initialization.DefaultClassLoaderScope;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
@@ -65,6 +66,7 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
     private File settingsFile;
     private InputStream stdin;
     private String defaultCharacterEncoding;
+    private Locale defaultLocale;
     private int daemonIdleTimeoutSecs = 60;
     private File daemonBaseDir = buildContext.getDaemonBaseDir();
     private final List<String> gradleOpts = new ArrayList<String>();
@@ -80,6 +82,7 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
 
     private final TestDirectoryProvider testDirectoryProvider;
     private final GradleDistribution distribution;
+    private boolean classLoaderCaching;
 
     protected AbstractGradleExecuter(GradleDistribution distribution, TestDirectoryProvider testDirectoryProvider) {
         this.distribution = distribution;
@@ -108,6 +111,7 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
         environmentVars.clear();
         stdin = null;
         defaultCharacterEncoding = null;
+        defaultLocale = null;
         noDefaultJvmArgs = false;
         deprecationChecksOn = true;
         stackTraceChecksOn = true;
@@ -194,6 +198,9 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
         if (defaultCharacterEncoding != null) {
             executer.withDefaultCharacterEncoding(defaultCharacterEncoding);
         }
+        if (defaultLocale != null) {
+            executer.withDefaultLocale(defaultLocale);
+        }
         executer.withGradleOpts(gradleOpts.toArray(new String[gradleOpts.size()]));
         if (noDefaultJvmArgs) {
             executer.withNoDefaultJvmArgs();
@@ -212,6 +219,7 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
         if (requireGradleHome) {
             executer.requireGradleHome();
         }
+        executer.withClassLoaderCaching(classLoaderCaching);
 
         return executer;
     }
@@ -306,6 +314,15 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
         return defaultCharacterEncoding == null ? Charset.defaultCharset().name() : defaultCharacterEncoding;
     }
 
+    public GradleExecuter withDefaultLocale(Locale defaultLocale) {
+        this.defaultLocale = defaultLocale;
+        return this;
+    }
+
+    public Locale getDefaultLocale() {
+        return defaultLocale;
+    }
+
     public GradleExecuter withSearchUpwards() {
         searchUpwards = true;
         return this;
@@ -374,7 +391,7 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
                 result.append(" ");
             }
             if (jvmArg.contains(" ")) {
-                assert !jvmArg.contains("\"");
+                assert !jvmArg.contains("\"") : "jvmArg '" + jvmArg + "' contains '\"'";
                 result.append('"');
                 result.append(jvmArg);
                 result.append('"');
@@ -427,6 +444,11 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
 
     public GradleExecuter requireIsolatedDaemons() {
         return withDaemonBaseDir(testDirectoryProvider.getTestDirectory().file("daemon"));
+    }
+
+    public GradleExecuter withClassLoaderCaching(boolean classLoaderCaching) {
+        this.classLoaderCaching = classLoaderCaching;
+        return this;
     }
 
     protected File getDaemonBaseDir() {
@@ -513,9 +535,19 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
         }
 
         properties.put("file.encoding", getDefaultCharacterEncoding());
+        Locale locale = getDefaultLocale();
+        if (locale != null) {
+            properties.put("user.language", locale.getLanguage());
+            properties.put("user.country", locale.getCountry());
+            properties.put("user.variant", locale.getVariant());
+        }
 
         if (eagerClassLoaderCreationChecksOn) {
             properties.put(DefaultClassLoaderScope.STRICT_MODE_PROPERTY, "true");
+        }
+
+        if (classLoaderCaching) {
+            properties.put(ClassLoaderCacheFactory.TOGGLE_CACHING_PROPERTY, "true");
         }
 
         return properties;

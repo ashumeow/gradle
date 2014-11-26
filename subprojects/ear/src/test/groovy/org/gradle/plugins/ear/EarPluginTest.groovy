@@ -58,14 +58,14 @@ class EarPluginTest {
     }
 
     @Test public void appliesBasePluginAndAddsConvention() {
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(EarPlugin)
 
         assertTrue(project.getPlugins().hasPlugin(BasePlugin));
         assertThat(project.convention.plugins.ear, instanceOf(EarPluginConvention))
     }
     
     @Test public void createsConfigurations() {
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(EarPlugin)
 
         def configuration = project.configurations.getByName(EarPlugin.DEPLOY_CONFIGURATION_NAME)
         assertFalse(configuration.visible)
@@ -77,7 +77,7 @@ class EarPluginTest {
     }
 
     @Test public void addsTasks() {
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(EarPlugin)
 
         def task = project.tasks[EarPlugin.EAR_TASK_NAME]
         assertThat(task, instanceOf(Ear))
@@ -88,8 +88,8 @@ class EarPluginTest {
     }
 
     @Test public void addsTasksToJavaProject() {
-        project.plugins.apply(JavaPlugin.class)
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(JavaPlugin.class)
+        project.pluginManager.apply(EarPlugin)
 
         def task = project.tasks[EarPlugin.EAR_TASK_NAME]
         assertThat(task, instanceOf(Ear))
@@ -101,7 +101,7 @@ class EarPluginTest {
     }
 
     @Test public void dependsOnEarlibConfig() {
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(EarPlugin)
 
         Project childProject = TestUtil.createChildProject(project, 'child')
         JavaPlugin javaPlugin = new JavaPlugin()
@@ -116,34 +116,32 @@ class EarPluginTest {
     }
 
     @Test public void appliesMappingsToArchiveTasks() {
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(EarPlugin)
 
         def task = project.task(type: Ear, 'customEar')
         assertThat(task.destinationDir, equalTo(project.libsDir))
     }
 
     @Test public void worksWithJavaBasePluginAppliedBeforeEarPlugin() {
-        project.plugins.apply(JavaBasePlugin.class)
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(JavaBasePlugin.class)
+        project.pluginManager.apply(EarPlugin)
 
         def task = project.task(type: Ear, 'customEar')
         assertThat(task.destinationDir, equalTo(project.libsDir))
     }
 
     @Test public void appliesMappingsToArchiveTasksForJavaProject() {
-        project.plugins.apply(EarPlugin)
-        project.plugins.apply(JavaPlugin.class)
+        project.pluginManager.apply(EarPlugin)
+        project.pluginManager.apply(JavaPlugin.class)
 
-        def task = project.task(type: Ear, 'customEar') {
-            earModel = new EarPluginConvention(null)
-        }
+        def task = project.task(type: Ear, 'customEar')
         assertThat(task.destinationDir, equalTo(project.libsDir))
 
         assertThat(task, dependsOn(hasItems(JavaPlugin.CLASSES_TASK_NAME)))
     }
 
     @Test public void addsEarAsPublication() {
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(EarPlugin)
 
         Configuration archiveConfiguration = project.getConfigurations().getByName(Dependency.ARCHIVES_CONFIGURATION);
         assertThat(archiveConfiguration.getAllArtifacts().size(), equalTo(1));
@@ -151,8 +149,8 @@ class EarPluginTest {
     }
 
     @Test public void replacesWarAsPublication() {
-        project.plugins.apply(EarPlugin)
-        project.plugins.apply(WarPlugin)
+        project.pluginManager.apply(EarPlugin)
+        project.pluginManager.apply(WarPlugin)
 
         Configuration archiveConfiguration = project.getConfigurations().getByName(Dependency.ARCHIVES_CONFIGURATION);
         assertThat(archiveConfiguration.getAllArtifacts().size(), equalTo(1));
@@ -160,8 +158,8 @@ class EarPluginTest {
     }
 
     @Test public void replacesJarAsPublication() {
-        project.plugins.apply(EarPlugin)
-        project.plugins.apply(JavaPlugin)
+        project.pluginManager.apply(EarPlugin)
+        project.pluginManager.apply(JavaPlugin)
 
         Configuration archiveConfiguration = project.getConfigurations().getByName(Dependency.ARCHIVES_CONFIGURATION);
         assertThat(archiveConfiguration.getAllArtifacts().size(), equalTo(1));
@@ -173,7 +171,7 @@ class EarPluginTest {
         project.file("src/main/application/META-INF/test.txt").createNewFile()
         project.file("src/main/application/test2.txt").createNewFile()
 
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(EarPlugin)
 
         execute project.tasks[EarPlugin.EAR_TASK_NAME]
 
@@ -185,7 +183,7 @@ class EarPluginTest {
         project.file("src/main/myapp").mkdirs()
         project.file("src/main/myapp/test.txt").createNewFile()
 
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(EarPlugin)
         project.convention.plugins.ear.appDirName = "src/main/myapp"
 
         execute project.tasks[EarPlugin.EAR_TASK_NAME]
@@ -199,7 +197,7 @@ class EarPluginTest {
         JavaPlugin javaPlugin = new JavaPlugin()
         javaPlugin.apply(childProject)
 
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(EarPlugin)
         project.convention.plugins.ear.libDirName = "APP-INF/lib"
         project.dependencies {
             earlib project(path: childProject.path, configuration: 'archives')
@@ -211,7 +209,7 @@ class EarPluginTest {
     }
 
     @Test public void supportsGeneratingDeploymentDescriptor() {
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(EarPlugin)
         execute project.tasks[EarPlugin.EAR_TASK_NAME]
 
         inEar "META-INF/application.xml"
@@ -221,14 +219,14 @@ class EarPluginTest {
         project.file("src/main/application/META-INF").mkdirs()
         project.file("src/main/application/META-INF/application.xml").text = TEST_APP_XML
 
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(EarPlugin)
         execute project.tasks[EarPlugin.EAR_TASK_NAME]
 
         assert inEar("META-INF/application.xml").text == TEST_APP_XML
     }
 
     @Test public void supportsRenamingDeploymentDescriptor() {
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(EarPlugin)
         project.convention.plugins.ear.deploymentDescriptor {
             fileName = "myapp.xml"
         }
@@ -241,7 +239,7 @@ class EarPluginTest {
         project.file("src/main/application/META-INF").mkdirs()
         project.file("src/main/application/META-INF/myapp.xml").text = TEST_APP_XML
 
-        project.plugins.apply(EarPlugin)
+        project.pluginManager.apply(EarPlugin)
         project.convention.plugins.ear.deploymentDescriptor {
             fileName = "myapp.xml"
         }

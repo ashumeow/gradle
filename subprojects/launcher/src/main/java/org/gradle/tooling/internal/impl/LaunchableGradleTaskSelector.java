@@ -16,20 +16,25 @@
 
 package org.gradle.tooling.internal.impl;
 
+import org.gradle.TaskExecutionRequest;
 import org.gradle.api.Nullable;
+import org.gradle.tooling.internal.protocol.InternalLaunchable;
 import org.gradle.tooling.model.TaskSelector;
 
 import java.io.Serializable;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Data used for {@link org.gradle.tooling.model.TaskSelector}.
  */
-public class LaunchableGradleTaskSelector implements TaskSelector, LaunchableImplementation, Serializable {
+public class LaunchableGradleTaskSelector implements TaskSelector, InternalLaunchable, TaskExecutionRequest, Serializable {
     private String name;
     private String displayName;
     private String description;
     private String taskName;
     private String projectPath;
+    private boolean isPublic;
 
     public String getName() {
         return name;
@@ -59,8 +64,8 @@ public class LaunchableGradleTaskSelector implements TaskSelector, LaunchableImp
         return this;
     }
 
-    public String getTaskName() {
-        return taskName;
+    public List<String> getArgs() {
+        return Collections.singletonList(taskName);
     }
 
     public LaunchableGradleTaskSelector setTaskName(String taskName) {
@@ -74,6 +79,15 @@ public class LaunchableGradleTaskSelector implements TaskSelector, LaunchableImp
 
     public LaunchableGradleTaskSelector setProjectPath(String projectPath) {
         this.projectPath = projectPath;
+        return this;
+    }
+
+    public boolean isPublic() {
+        return isPublic;
+    }
+
+    public LaunchableGradleTaskSelector setPublic(boolean isPublic) {
+        this.isPublic = isPublic;
         return this;
     }
 

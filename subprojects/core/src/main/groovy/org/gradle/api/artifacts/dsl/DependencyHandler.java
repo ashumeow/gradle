@@ -19,7 +19,7 @@ import groovy.lang.Closure;
 import org.gradle.api.Action;
 import org.gradle.api.Incubating;
 import org.gradle.api.artifacts.Dependency;
-import org.gradle.api.artifacts.resolution.ArtifactResolutionQuery;
+import org.gradle.api.artifacts.query.ArtifactResolutionQuery;
 
 import java.util.Map;
 
@@ -137,15 +137,15 @@ import java.util.Map;
  *
  * <h3>External dependencies</h3>
  *
- * <p>There are 2 notations supported for declaring a dependency on an external module.
- * One is a String notation formatted this way: group:name:version</p>
+ * <p>There are two notations supported for declaring a dependency on an external module.
+ * One is a string notation formatted this way:</p>
  *
- * <code><i>configurationName</i> "<i>group</i>:<i>name</i>:<i>version</i>:<i>classifier</i>"</code>
+ * <code><i>configurationName</i> "<i>group</i>:<i>name</i>:<i>version</i>:<i>classifier</i>@<i>extension</i>"</code>
  *
  * <p>The other is a map notation:</p>
  *
  * <code><i>configurationName</i> group: <i>group</i>:, name: <i>name</i>, version: <i>version</i>, classifier:
- * <i>classifier</i></code>
+ * <i>classifier</i>, ext: <i>extension</i></code>
  *
  * <p>In both notations, all properties, except name, are optional.</p>
  *
@@ -333,7 +333,7 @@ public interface DependencyHandler {
     ComponentMetadataHandler getComponents();
 
     /**
-     * Configures module metadata for this project.
+     * Configures component metadata for this project.
      *
      * <p>This method executes the given action against the {@link org.gradle.api.artifacts.dsl.ComponentMetadataHandler} for this project.
      *
@@ -343,5 +343,32 @@ public interface DependencyHandler {
     @Incubating
     void components(Action<? super ComponentMetadataHandler> configureAction);
 
+    /**
+     * Returns the component module metadata handler for this project. The returned handler can be used for adding rules
+     * that modify the metadata of depended-on software components.
+     *
+     * @return the component module metadata handler for this project
+     * @since 2.2
+     */
+    @Incubating
+    ComponentModuleMetadataHandler getModules();
+
+    /**
+     * Configures module metadata for this project.
+     *
+     * <p>This method executes the given action against the {@link org.gradle.api.artifacts.dsl.ComponentModuleMetadataHandler} for this project.
+     *
+     * @param configureAction the action to use to configure module metadata
+     * @since 2.2
+     */
+    @Incubating
+    void modules(Action<? super ComponentModuleMetadataHandler> configureAction);
+
+    /**
+     * Creates an artifact resolution query.
+     *
+     * @since 2.0
+     */
+    @Incubating
     ArtifactResolutionQuery createArtifactResolutionQuery();
 }

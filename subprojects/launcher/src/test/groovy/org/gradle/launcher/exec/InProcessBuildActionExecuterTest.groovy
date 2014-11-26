@@ -16,44 +16,57 @@
 
 package org.gradle.launcher.exec
 
-import org.gradle.initialization.BuildController
-import spock.lang.Specification
-import org.gradle.initialization.GradleLauncherFactory
-import org.gradle.initialization.BuildAction
-
-import org.gradle.initialization.BuildRequestMetaData
-import org.gradle.GradleLauncher
 import org.gradle.BuildResult
-
 import org.gradle.StartParameter
+import org.gradle.api.internal.GradleInternal
+import org.gradle.initialization.*
+import spock.lang.Specification
 
 class InProcessBuildActionExecuterTest extends Specification {
     final GradleLauncherFactory factory = Mock()
-    final GradleLauncher launcher = Mock()
+    final DefaultGradleLauncher launcher = Mock()
+    final BuildCancellationToken cancellationToken = Mock()
     final BuildActionParameters param = Mock()
     final BuildRequestMetaData metaData = Mock()
     final BuildResult buildResult = Mock()
+    final GradleInternal gradle = Mock()
     final InProcessBuildActionExecuter executer = new InProcessBuildActionExecuter(factory)
 
     def setup() {
         _ * param.buildRequestMetaData >> metaData
     }
 
-    def "creates a launcher using a default StartParameter when the action does not specify any"() {
+    def "does nothing when action does not use the build"() {
         BuildAction<String> action = Mock()
 
         when:
-        def result = executer.execute(action, param)
+        def result = executer.execute(action, cancellationToken, param)
 
         then:
         result == '<result>'
 
         and:
-        1 * factory.newInstance(!null, metaData) >> launcher
+        1 * action.run(!null) >> { BuildController controller ->
+            return '<result>'
+        }
+    }
+
+    def "creates a launcher using a default StartParameter when the action does not specify any"() {
+        BuildAction<String> action = Mock()
+
+        when:
+        def result = executer.execute(action, cancellationToken, param)
+
+        then:
+        result == '<result>'
+
+        and:
+        1 * factory.newInstance(!null, cancellationToken, metaData) >> launcher
         1 * action.run(!null) >> { BuildController controller ->
             assert controller.launcher == launcher
             return '<result>'
         }
+        1 * launcher.stop()
     }
 
     def "creates a launcher using StartParameter specified by the action"() {
@@ -61,18 +74,19 @@ class InProcessBuildActionExecuterTest extends Specification {
         def startParam = new StartParameter()
 
         when:
-        def result = executer.execute(action, param)
+        def result = executer.execute(action, cancellationToken, param)
 
         then:
         result == '<result>'
 
         and:
-        1 * factory.newInstance(startParam, metaData) >> launcher
+        1 * factory.newInstance(startParam, cancellationToken, metaData) >> launcher
         1 * action.run(!null) >> { BuildController controller ->
             controller.startParameter = startParam
             assert controller.launcher == launcher
             return '<result>'
         }
+        1 * launcher.stop()
     }
 
     def "cannot set start parameters after launcher created"() {
@@ -84,52 +98,100 @@ class InProcessBuildActionExecuterTest extends Specification {
             controller.launcher
             controller.startParameter = startParam
         }
-        _ * factory.newInstance(!null, metaData) >> launcher
+        _ * factory.newInstance(!null, cancellationToken, metaData) >> launcher
 
         when:
-        executer.execute(action, param)
+        executer.execute(action, cancellationToken, param)
 
         then:
         IllegalStateException e = thrown()
-        e.message == 'Cannot change start parameter after launcher has been created.'
+        e.message == 'Cannot change start parameter after build has started.'
+
+        and:
+        1 * launcher.stop()
+    }
+
+    def "creates launcher when Gradle instance is requested"() {
+        BuildAction<String> action = Mock()
+
+        when:
+        def result = executer.execute(action, cancellationToken, param)
+
+        then:
+        result == '<result>'
+
+        and:
+        1 * factory.newInstance(!null, cancellationToken, metaData) >> launcher
+        1 * launcher.getGradle() >> gradle
+        1 * action.run(!null) >> { BuildController controller ->
+            assert controller.getGradle() == gradle
+            return '<result>'
+        }
+        1 * launcher.stop()
     }
 
     def "runs build when requested by action"() {
         BuildAction<String> action = Mock()
 
         when:
-        def result = executer.execute(action, param)
+        def result = executer.execute(action, cancellationToken, param)
 
         then:
         result == '<result>'
 
         and:
-        1 * factory.newInstance(!null, metaData) >> launcher
+        1 * factory.newInstance(!null, cancellationToken, metaData) >> launcher
         1 * launcher.run() >> buildResult
         _ * buildResult.failure >> null
+        _ * buildResult.gradle >> gradle
         1 * action.run(!null) >> { BuildController controller ->
-            controller.run()
+            assert controller.run() == gradle
             return '<result>'
         }
+        1 * launcher.stop()
     }
 
     def "configures build when requested by action"() {
         BuildAction<String> action = Mock()
 
         when:
-        def result = executer.execute(action, param)
+        def result = executer.execute(action, cancellationToken, param)
 
         then:
         result == '<result>'
 
         and:
-        1 * factory.newInstance(!null, metaData) >> launcher
+        1 * factory.newInstance(!null, cancellationToken, metaData) >> launcher
         1 * launcher.getBuildAnalysis() >> buildResult
         _ * buildResult.failure >> null
+        _ * buildResult.gradle >> gradle
         1 * action.run(!null) >> { BuildController controller ->
-            controller.configure()
+            assert controller.configure() == gradle
             return '<result>'
         }
+        1 * launcher.stop()
+    }
+
+    def "cannot request configuration after build has been run"() {
+        BuildAction<String> action = Mock()
+
+        given:
+        action.run(!null) >> { BuildController controller ->
+            controller.run()
+            controller.configure()
+        }
+
+        when:
+        executer.execute(action, cancellationToken, param)
+
+        then:
+        IllegalStateException e = thrown()
+        e.message == 'Cannot use launcher after build has completed.'
+
+        and:
+        1 * factory.newInstance(!null, cancellationToken, metaData) >> launcher
+        1 * launcher.run() >> buildResult
+        1 * launcher.stop()
     }
 
     def "wraps build failure"() {
@@ -140,17 +202,18 @@ class InProcessBuildActionExecuterTest extends Specification {
         buildResult.failure >> failure
 
         when:
-        executer.execute(action, param)
+        executer.execute(action, cancellationToken, param)
 
         then:
         ReportedException e = thrown()
         e.cause == failure
 
         and:
-        1 * factory.newInstance(!null, metaData) >> launcher
+        1 * factory.newInstance(!null, cancellationToken, metaData) >> launcher
         1 * launcher.run() >> buildResult
         1 * action.run(!null) >> { BuildController controller ->
             controller.run()
         }
+        1 * launcher.stop()
     }
 }

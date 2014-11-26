@@ -61,21 +61,30 @@ public class ConfigureDelegate extends GroovyObjectSupport {
             try {
                 return _delegate.invokeMethod(name, params);
             } catch (groovy.lang.MissingMethodException e) {
+                // TODO - should check the type as well, and below too, however we have no idea what the final type is going to be.
+                // Rework the DynamicObject contract to allow us to know if the method was found or not
+                if (!name.equals(e.getMethod())) {
+                    throw e;
+                }
                 failure = e;
+            }
+
+            if (!isAlreadyConfiguring && _isConfigureMethod(name, params)) {
+                return _configure(name, params);
             }
 
             // try the owner
             try {
                 return _owner.invokeMethod(name, params);
             } catch (groovy.lang.MissingMethodException e) {
+                if (!name.equals(e.getMethod())) {
+                    throw e;
+                }
                 // ignore
             }
 
-            if (isAlreadyConfiguring || !_isConfigureMethod(name, params)) {
-                throw failure;
-            }
+            throw failure;
 
-            return _configure(name, params);
         } finally {
             _configuring.set(isAlreadyConfiguring);
         }
@@ -89,6 +98,9 @@ public class ConfigureDelegate extends GroovyObjectSupport {
             try {
                 return _delegate.getProperty(name);
             } catch (MissingPropertyException e) {
+                if (!name.equals(e.getProperty())) {
+                    throw e;
+                }
                 failure = e;
             }
 
@@ -96,6 +108,9 @@ public class ConfigureDelegate extends GroovyObjectSupport {
             try {
                 return _owner.getProperty(name);
             } catch (MissingPropertyException e) {
+                if (!name.equals(e.getProperty())) {
+                    throw e;
+                }
                 // Ignore
             }
 

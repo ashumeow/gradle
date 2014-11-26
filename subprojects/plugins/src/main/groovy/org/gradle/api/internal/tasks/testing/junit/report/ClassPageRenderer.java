@@ -16,7 +16,7 @@
 package org.gradle.api.internal.tasks.testing.junit.report;
 
 import org.gradle.internal.ErroringAction;
-import org.gradle.api.internal.html.SimpleHtmlWriter;
+import org.gradle.internal.html.SimpleHtmlWriter;
 import org.gradle.api.internal.tasks.testing.junit.result.TestFailure;
 import org.gradle.api.internal.tasks.testing.junit.result.TestResultsProvider;
 import org.gradle.api.tasks.testing.TestOutputEvent;
@@ -29,10 +29,8 @@ import java.io.IOException;
 class ClassPageRenderer extends PageRenderer<ClassTestResults> {
     private final CodePanelRenderer codePanelRenderer = new CodePanelRenderer();
     private final TestResultsProvider resultsProvider;
-    private final long classId;
 
-    public ClassPageRenderer(long classId, TestResultsProvider provider) {
-        this.classId = classId;
+    public ClassPageRenderer(TestResultsProvider provider) {
         this.resultsProvider = provider;
     }
 
@@ -93,6 +91,7 @@ class ClassPageRenderer extends PageRenderer<ClassTestResults> {
                 renderTests(writer);
             }
         });
+        final long classId = getModel().getId();
         if (resultsProvider.hasOutput(classId, TestOutputEvent.Destination.StdOut)) {
             addTab("Standard output", new ErroringAction<SimpleHtmlWriter>() {
                 @Override

@@ -15,11 +15,17 @@
  */
 package org.gradle.launcher.daemon.server.exec;
 
-import org.gradle.initialization.GradleLauncherFactory;
-import org.gradle.internal.nativeplatform.ProcessEnvironment;
+import org.gradle.internal.nativeintegration.ProcessEnvironment;
 import org.gradle.launcher.daemon.context.DaemonContext;
 import org.gradle.launcher.daemon.diagnostics.DaemonDiagnostics;
 import org.gradle.launcher.daemon.protocol.Command;
+import org.gradle.launcher.daemon.server.api.DaemonCommandAction;
+import org.gradle.launcher.daemon.server.api.DaemonCommandExecution;
+import org.gradle.launcher.daemon.server.api.DaemonConnection;
+import org.gradle.launcher.daemon.server.api.DaemonStateControl;
+import org.gradle.launcher.daemon.server.health.DaemonHealthServices;
+import org.gradle.launcher.exec.BuildActionExecuter;
+import org.gradle.launcher.exec.BuildActionParameters;
 import org.gradle.logging.LoggingManagerInternal;
 import org.gradle.logging.internal.LoggingOutputInternal;
 
@@ -33,27 +39,26 @@ import java.util.List;
  */
 public class DefaultDaemonCommandExecuter implements DaemonCommandExecuter {
     private final LoggingOutputInternal loggingOutput;
-    private final GradleLauncherFactory launcherFactory;
-    private DaemonCommandAction hygieneAction;
+    private final BuildActionExecuter<BuildActionParameters> actionExecuter;
+    private final DaemonHealthServices healthServices;
     private final ProcessEnvironment processEnvironment;
     private final File daemonLog;
 
-    public DefaultDaemonCommandExecuter(GradleLauncherFactory launcherFactory, ProcessEnvironment processEnvironment,
-                                        LoggingManagerInternal loggingOutput, File daemonLog, DaemonCommandAction hygieneAction) {
+    public DefaultDaemonCommandExecuter(BuildActionExecuter<BuildActionParameters> actionExecuter, ProcessEnvironment processEnvironment,
+                                        LoggingManagerInternal loggingOutput, File daemonLog, DaemonHealthServices healthServices) {
         this.processEnvironment = processEnvironment;
         this.daemonLog = daemonLog;
         this.loggingOutput = loggingOutput;
-        this.launcherFactory = launcherFactory;
-        this.hygieneAction = hygieneAction;
+        this.actionExecuter = actionExecuter;
+        this.healthServices = healthServices;
     }
 
-    public void executeCommand(DaemonConnection connection, Command command, DaemonContext daemonContext, DaemonStateControl daemonStateControl, Runnable commandAbandoned) {
+    public void executeCommand(DaemonConnection connection, Command command, DaemonContext daemonContext, DaemonStateControl daemonStateControl) {
         new DaemonCommandExecution(
             connection,
             command,
             daemonContext,
             daemonStateControl,
-            commandAbandoned,
             createActions(daemonContext)
         ).proceed();
     }
@@ -61,18 +66,18 @@ public class DefaultDaemonCommandExecuter implements DaemonCommandExecuter {
     protected List<DaemonCommandAction> createActions(DaemonContext daemonContext) {
         DaemonDiagnostics daemonDiagnostics = new DaemonDiagnostics(daemonLog, daemonContext.getPid());
         return new LinkedList<DaemonCommandAction>(Arrays.asList(
-            new CatchAndForwardDaemonFailure(),
-            hygieneAction,
-            new HandleStop(),
-            new StartBuildOrRespondWithBusy(daemonDiagnostics),
+            new HandleCancel(),            
+            new ReturnResult(),
+            new StartBuildOrRespondWithBusy(daemonDiagnostics), // from this point down, the daemon is 'busy'
+            healthServices.getGCHintAction(), //TODO SF needs to happen after the result is returned to the client
             new EstablishBuildEnvironment(processEnvironment),
             new LogToClient(loggingOutput, daemonDiagnostics), // from this point down, logging is sent back to the client
+            healthServices.getHealthTrackerAction(),
             new ForwardClientInput(),
-            new ReturnResult(),
-            new StartStopIfBuildAndStop(),
+            new RequestStopIfSingleUsedDaemon(),
             new ResetDeprecationLogger(),
             new WatchForDisconnection(),
-            new ExecuteBuild(launcherFactory)
+            new ExecuteBuild(actionExecuter)
         ));
     }
 }

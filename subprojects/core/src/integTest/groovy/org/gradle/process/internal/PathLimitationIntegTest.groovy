@@ -17,7 +17,6 @@
 package org.gradle.process.internal
 
 import org.apache.commons.lang.RandomStringUtils
-import org.gradle.CacheUsage
 import org.gradle.api.Action
 import org.gradle.api.internal.ClassPathRegistry
 import org.gradle.api.internal.DefaultClassPathProvider
@@ -31,8 +30,7 @@ import org.gradle.cache.internal.*
 import org.gradle.cache.internal.locklistener.NoOpFileLockContentionHandler
 import org.gradle.internal.id.LongIdGenerator
 import org.gradle.internal.jvm.Jvm
-import org.gradle.internal.nativeplatform.services.NativeServices
-import org.gradle.internal.os.OperatingSystem
+import org.gradle.internal.nativeintegration.services.NativeServices
 import org.gradle.listener.ListenerBroadcast
 import org.gradle.messaging.remote.MessagingServer
 import org.gradle.messaging.remote.internal.MessagingServices
@@ -40,9 +38,10 @@ import org.gradle.process.internal.child.WorkerProcessClassPathProvider
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.gradle.util.GradleVersion
+import org.gradle.util.Requires
+import org.gradle.util.TestPrecondition
 import org.junit.Rule
 import spock.lang.Ignore
-import spock.lang.IgnoreIf
 import spock.lang.Specification
 import spock.lang.Unroll
 
@@ -56,9 +55,9 @@ class PathLimitationIntegTest extends Specification {
 
     @Rule
     public final TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider();
-    private final ProcessMetaDataProvider metaDataProvider = new DefaultProcessMetaDataProvider(NativeServices.getInstance().get(org.gradle.internal.nativeplatform.ProcessEnvironment.class));
+    private final ProcessMetaDataProvider metaDataProvider = new DefaultProcessMetaDataProvider(NativeServices.getInstance().get(org.gradle.internal.nativeintegration.ProcessEnvironment.class));
     private final CacheFactory factory = new DefaultCacheFactory(new DefaultFileLockManager(metaDataProvider, new NoOpFileLockContentionHandler()));
-    private final CacheRepository cacheRepository = new DefaultCacheRepository(new DefaultCacheScopeMapping(tmpDir.getTestDirectory(), null, GradleVersion.current()), CacheUsage.ON, factory);
+    private final CacheRepository cacheRepository = new DefaultCacheRepository(new DefaultCacheScopeMapping(tmpDir.getTestDirectory(), null, GradleVersion.current()), factory);
     private final ModuleRegistry moduleRegistry = new DefaultModuleRegistry();
     private final ClassPathRegistry classPathRegistry = new DefaultClassPathRegistry(new DefaultClassPathProvider(moduleRegistry), new WorkerProcessClassPathProvider(cacheRepository, moduleRegistry));
     private final DefaultWorkerProcessFactory workerFactory = new DefaultWorkerProcessFactory(LogLevel.INFO, server, classPathRegistry, TestFiles.resolver(tmpDir.getTestDirectory()), new LongIdGenerator());
@@ -73,7 +72,7 @@ class PathLimitationIntegTest extends Specification {
         messagingServices.stop();
     }
 
-    @IgnoreIf({OperatingSystem.current().isWindows()})
+    @Requires(TestPrecondition.NOT_WINDOWS)
     @Unroll
     def "WorkerProcessBuilder handles workingDir with absolute path length #absolutePathLength"() throws Throwable {
         when:
@@ -85,7 +84,7 @@ class PathLimitationIntegTest extends Specification {
         absolutePathLength << [258, 259, 260]
     }
 
-    @IgnoreIf({OperatingSystem.current().isWindows()})
+    @Requires(TestPrecondition.NOT_WINDOWS)
     @Unroll
     def "JavaProcessBuilder handles workingDir with absolute path length #absolutePathLength"() throws Throwable {
         when:

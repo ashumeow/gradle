@@ -17,39 +17,26 @@ package org.gradle.api.plugins.scala
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.api.artifacts.Configuration
 import org.gradle.api.file.FileTreeElement
 import org.gradle.api.internal.file.FileResolver
 import org.gradle.api.internal.tasks.DefaultScalaSourceSet
 import org.gradle.api.plugins.JavaBasePlugin
 import org.gradle.api.plugins.JavaPluginConvention
 import org.gradle.api.reporting.ReportingExtension
+import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.ScalaRuntime
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.scala.ScalaCompile
 import org.gradle.api.tasks.scala.ScalaDoc
-import org.gradle.api.tasks.JavaExec
-import org.gradle.util.DeprecationLogger
 
 import javax.inject.Inject
 
 class ScalaBasePlugin implements Plugin<Project> {
-    /**
-     * The name of the configuration holding the Scala compiler and tools.
-     *
-     * @deprecated Typically, usages of {@code scalaTools} can simply be removed,
-     * and the Scala tools libraries to be used will be inferred from the Scala
-     * library found on the regular (compile) class path. In some cases, it may
-     * be necessary to additionally configure the {@code scalaClasspath} property
-     * of {@code ScalaCompile} and {@code ScalaDoc} tasks.
-     */
-    static final String SCALA_TOOLS_CONFIGURATION_NAME = "scalaTools"
-
     static final String ZINC_CONFIGURATION_NAME = "zinc"
 
     static final String SCALA_RUNTIME_EXTENSION_NAME = "scalaRuntime"
 
-    private static final String DEFAULT_ZINC_VERSION = "0.3.0"
+    public static final String DEFAULT_ZINC_VERSION = "0.3.0"
 
     private final FileResolver fileResolver
 
@@ -63,7 +50,8 @@ class ScalaBasePlugin implements Plugin<Project> {
 
     void apply(Project project) {
         this.project = project
-        def javaPlugin = project.plugins.apply(JavaBasePlugin.class)
+        project.apply(type: JavaBasePlugin)
+        def javaPlugin = project.plugins.getPlugin(JavaBasePlugin.class)
 
         configureConfigurations(project)
         configureScalaRuntimeExtension()
@@ -73,24 +61,9 @@ class ScalaBasePlugin implements Plugin<Project> {
     }
 
     private void configureConfigurations(Project project) {
-        def scalaToolsConfiguration = project.configurations.create(SCALA_TOOLS_CONFIGURATION_NAME)
-                .setVisible(false)
-                .setDescription("The Scala tools libraries to be used for this Scala project. (Deprecated)")
-        deprecateScalaToolsConfiguration(scalaToolsConfiguration)
-
         project.configurations.create(ZINC_CONFIGURATION_NAME)
                 .setVisible(false)
                 .setDescription("The Zinc incremental compiler to be used for this Scala project.")
-    }
-
-    private void deprecateScalaToolsConfiguration(Configuration scalaConfiguration) {
-        scalaConfiguration.dependencies.whenObjectAdded {
-            DeprecationLogger.nagUserOfDiscontinuedConfiguration(SCALA_TOOLS_CONFIGURATION_NAME,
-                    "Typically, usages of 'scalaTools' can simply be removed, and the Scala tools libraries " +
-                    "to be used will be inferred from the Scala library found on the regular (compile) class path. " +
-                    "In some cases, it may be necessary to additionally configure the 'scalaClasspath' property of " +
-                    "ScalaCompile and ScalaDoc tasks.");
-        }
     }
 
     private void configureScalaRuntimeExtension() {

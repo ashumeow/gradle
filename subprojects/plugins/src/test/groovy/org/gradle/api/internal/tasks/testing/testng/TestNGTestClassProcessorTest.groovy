@@ -24,7 +24,6 @@ import org.gradle.api.internal.tasks.testing.filter.DefaultTestFilter
 import org.gradle.api.tasks.testing.TestResult.ResultType
 import org.gradle.api.tasks.testing.testng.TestNGOptions
 import org.gradle.internal.id.LongIdGenerator
-import org.gradle.logging.StandardOutputRedirector
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.junit.Rule
 import org.testng.ITestContext
@@ -37,13 +36,13 @@ import spock.lang.Subject
 
 class TestNGTestClassProcessorTest extends Specification {
 
-    @Rule TestNameTestDirectoryProvider reportDir = new TestNameTestDirectoryProvider()
+    @Rule TestNameTestDirectoryProvider dir = new TestNameTestDirectoryProvider()
 
     def processor = Mock(TestResultProcessor)
 
-    def options = Spy(TestNGSpec, constructorArgs:[new TestNGOptions(reportDir.testDirectory), new DefaultTestFilter()])
+    def options = Spy(TestNGSpec, constructorArgs:[new TestNGOptions(dir.testDirectory), new DefaultTestFilter()])
 
-    @Subject classProcessor = new TestNGTestClassProcessor(reportDir.testDirectory, options, [], new LongIdGenerator(), {} as StandardOutputRedirector)
+    @Subject classProcessor = new TestNGTestClassProcessor(dir.testDirectory, options, [], new LongIdGenerator())
 
     void process(Class ... clazz) {
         classProcessor.startProcessing(processor)
@@ -223,6 +222,31 @@ class TestNGTestClassProcessorTest extends Specification {
         when: process(ATestNGClassWithSkippedTest)
 
         then: 1 * processor.completed(_, { it.resultType == ResultType.FAILURE})
+    }
+
+    void "executes test from suite"() {
+        def suite = dir.file("suite.xml") << """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="AwesomeSuite">
+  <test name="AwesomeTest">
+    <classes>
+      <class name="org.gradle.api.internal.tasks.testing.testng.ATestNGClass"/>
+    </classes>
+  </test>
+</suite>"""
+        classProcessor = new TestNGTestClassProcessor(dir.testDirectory, options, [suite], new LongIdGenerator())
+
+        when:
+        classProcessor.startProcessing(processor)
+        classProcessor.stop()
+
+        then: 1 * processor.started({ it.id == 1 && it.name == 'Gradle test' && it.className == null }, { it.parentId == null })
+        then: 1 * processor.started({ it.id == 2 && it.name == 'AwesomeTest' && it.className == null }, { it.parentId == 1 })
+        then: 1 * processor.started({ it.id == 3 && it.name == 'ok' && it.className == ATestNGClass.name }, { it.parentId == 2 })
+        then: 1 * processor.completed(3, { it.resultType == ResultType.SUCCESS })
+        then: 1 * processor.completed(2, { it.resultType == null })
+        then: 1 * processor.completed(1, { it.resultType == null })
+        0 * processor._
     }
 }
 

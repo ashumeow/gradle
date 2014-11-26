@@ -16,11 +16,10 @@
 
 package org.gradle.initialization;
 
-import org.gradle.CacheUsage;
-import org.gradle.RefreshOptions;
 import org.gradle.StartParameter;
 import org.gradle.api.logging.LogLevel;
 import org.gradle.cli.CommandLineArgumentException;
+import org.gradle.logging.ConsoleOutput;
 import org.gradle.logging.ShowStacktrace;
 import org.gradle.test.fixtures.file.TestFile;
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider;
@@ -43,20 +42,21 @@ public class DefaultCommandLineConverterTest {
 
     private TestFile currentDir = testDir.file("current-dir");
     private File expectedBuildFile;
-    private File expectedGradleUserHome = StartParameter.DEFAULT_GRADLE_USER_HOME;
-    private File expectedProjectDir = currentDir;
+    private File expectedGradleUserHome = new BuildLayoutParameters().getGradleUserHomeDir();
+    private File expectedCurrentDir = currentDir;
+    private File expectedProjectDir;
     private List<String> expectedTaskNames = toList();
     private Set<String> expectedExcludedTasks = toSet();
     private boolean buildProjectDependencies = true;
     private Map<String, String> expectedSystemProperties = new HashMap<String, String>();
     private Map<String, String> expectedProjectProperties = new HashMap<String, String>();
     private List<File> expectedInitScripts = new ArrayList<File>();
-    private CacheUsage expectedCacheUsage = CacheUsage.ON;
     private boolean expectedSearchUpwards = true;
     private boolean expectedDryRun;
     private ShowStacktrace expectedShowStackTrace = ShowStacktrace.INTERNAL_EXCEPTIONS;
     private LogLevel expectedLogLevel = LogLevel.LIFECYCLE;
     private boolean expectedColorOutput = true;
+    private ConsoleOutput expectedConsoleOutput = ConsoleOutput.Auto;
     private StartParameter actualStartParameter;
     private boolean expectedProfile;
     private File expectedProjectCacheDir;
@@ -65,7 +65,6 @@ public class DefaultCommandLineConverterTest {
     private final DefaultCommandLineConverter commandLineConverter = new DefaultCommandLineConverter();
     private boolean expectedContinue;
     private boolean expectedOffline;
-    private RefreshOptions expectedRefreshOptions = RefreshOptions.NONE;
     private boolean expectedRecompileScripts;
     private int expectedParallelExecutorCount;
     private boolean expectedConfigureOnDemand;
@@ -87,14 +86,15 @@ public class DefaultCommandLineConverterTest {
         assertEquals(expectedBuildFile, startParameter.getBuildFile());
         assertEquals(expectedTaskNames, startParameter.getTaskNames());
         assertEquals(buildProjectDependencies, startParameter.isBuildProjectDependencies());
-        assertEquals(expectedProjectDir.getAbsoluteFile(), startParameter.getCurrentDir().getAbsoluteFile());
-        assertEquals(expectedCacheUsage, startParameter.getCacheUsage());
+        assertEquals(expectedCurrentDir.getAbsoluteFile(), startParameter.getCurrentDir().getAbsoluteFile());
+        assertEquals(expectedProjectDir, startParameter.getProjectDir());
         assertEquals(expectedSearchUpwards, startParameter.isSearchUpwards());
         assertEquals(expectedProjectProperties, startParameter.getProjectProperties());
         assertEquals(expectedSystemProperties, startParameter.getSystemPropertiesArgs());
         assertEquals(expectedGradleUserHome.getAbsoluteFile(), startParameter.getGradleUserHomeDir().getAbsoluteFile());
         assertEquals(expectedLogLevel, startParameter.getLogLevel());
         assertEquals(expectedColorOutput, startParameter.isColorOutput());
+        assertEquals(expectedConsoleOutput, startParameter.getConsoleOutput());
         assertEquals(expectedDryRun, startParameter.isDryRun());
         assertEquals(expectedShowStackTrace, startParameter.getShowStacktrace());
         assertEquals(expectedExcludedTasks, startParameter.getExcludedTaskNames());
@@ -104,7 +104,6 @@ public class DefaultCommandLineConverterTest {
         assertEquals(expectedOffline, startParameter.isOffline());
         assertEquals(expectedRecompileScripts, startParameter.isRecompileScripts());
         assertEquals(expectedRerunTasks, startParameter.isRerunTasks());
-        assertEquals(expectedRefreshOptions, startParameter.getRefreshOptions());
         assertEquals(expectedRefreshDependencies, startParameter.isRefreshDependencies());
         assertEquals(expectedProjectCacheDir, startParameter.getProjectCacheDir());
         assertEquals(expectedParallelExecutorCount, startParameter.getParallelThreadCount());
@@ -128,28 +127,32 @@ public class DefaultCommandLineConverterTest {
 
     @Test
     public void withSpecifiedProjectDirectory() {
-        expectedProjectDir = testDir.file("project-dir");
-        checkConversion("-p", expectedProjectDir.getAbsolutePath());
+        expectedCurrentDir = testDir.file("project-dir");
+        expectedProjectDir = expectedCurrentDir;
+        checkConversion("-p", expectedCurrentDir.getAbsolutePath());
 
-        expectedProjectDir = currentDir.file("project-dir");
+        expectedCurrentDir = currentDir.file("project-dir");
+        expectedProjectDir = expectedCurrentDir;
         checkConversion("-p", "project-dir");
     }
 
     @Test
     public void withSpecifiedBuildFileName() throws IOException {
         expectedBuildFile = testDir.file("somename");
-        expectedProjectDir = expectedBuildFile.getParentFile();
+        expectedCurrentDir = expectedBuildFile.getParentFile();
+        expectedProjectDir = expectedCurrentDir;
         checkConversion("-b", expectedBuildFile.getAbsolutePath());
 
         expectedBuildFile = currentDir.file("somename");
-        expectedProjectDir = expectedBuildFile.getParentFile();
+        expectedCurrentDir = expectedBuildFile.getParentFile();
+        expectedProjectDir = expectedCurrentDir;
         checkConversion("-b", "somename");
     }
 
     @Test
     public void withSpecifiedSettingsFileName() throws IOException {
         File expectedSettingsFile = currentDir.file("somesettings");
-        expectedProjectDir = expectedSettingsFile.getParentFile();
+        expectedCurrentDir = expectedSettingsFile.getParentFile();
 
         checkConversion("-c", "somesettings");
 
@@ -211,17 +214,6 @@ public class DefaultCommandLineConverterTest {
     public void withTaskNames() {
         expectedTaskNames = toList("a", "b");
         checkConversion("a", "b");
-    }
-
-    @Test
-    public void withRebuildCacheFlagSet() {
-        expectedCacheUsage = CacheUsage.REBUILD;
-        checkConversion("-C", "rebuild");
-    }
-
-    @Test
-    public void withCacheOnFlagSet() {
-        checkConversion("-C", "on");
     }
 
     @Test(expected = CommandLineArgumentException.class)
@@ -314,7 +306,14 @@ public class DefaultCommandLineConverterTest {
     @Test
     public void withNoColor() {
         expectedColorOutput = false;
+        expectedConsoleOutput = ConsoleOutput.Disable;
         checkConversion("--no-color");
+    }
+
+    @Test
+    public void withColor() {
+        expectedConsoleOutput = ConsoleOutput.Enable;
+        checkConversion("--color", "always");
     }
 
     @Test(expected = CommandLineArgumentException.class)
@@ -354,7 +353,6 @@ public class DefaultCommandLineConverterTest {
     @Test
     public void withRefreshDependencies() {
         expectedRefreshDependencies = true;
-        expectedRefreshOptions = new RefreshOptions(asList(RefreshOptions.Option.DEPENDENCIES));
         checkConversion("--refresh-dependencies");
         checkConversion("-refresh-dependencies");
     }
@@ -363,18 +361,6 @@ public class DefaultCommandLineConverterTest {
     public void withRecompileScripts() {
         expectedRecompileScripts = true;
         checkConversion("--recompile-scripts");
-    }
-
-    @Test
-    public void withRefreshDependenciesSet() {
-        expectedRefreshDependencies = true;
-        expectedRefreshOptions = new RefreshOptions(Arrays.asList(RefreshOptions.Option.DEPENDENCIES));
-        checkConversion("--refresh", "dependencies");
-    }
-
-    @Test(expected = CommandLineArgumentException.class)
-    public void withUnknownRefreshOption() {
-        checkConversion("--refresh", "unknown");
     }
 
     @Test(expected = CommandLineArgumentException.class)

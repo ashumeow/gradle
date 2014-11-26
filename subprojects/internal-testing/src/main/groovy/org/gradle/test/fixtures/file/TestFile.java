@@ -24,8 +24,8 @@ import org.apache.tools.ant.taskdefs.Tar;
 import org.apache.tools.ant.taskdefs.Zip;
 import org.apache.tools.ant.types.EnumeratedAttribute;
 import org.codehaus.groovy.runtime.DefaultGroovyMethods;
-import org.gradle.internal.nativeplatform.filesystem.*;
-import org.gradle.internal.nativeplatform.services.NativeServices;
+import org.gradle.internal.nativeintegration.filesystem.FileSystem;
+import org.gradle.internal.nativeintegration.services.NativeServices;
 import org.hamcrest.Matcher;
 
 import java.io.*;
@@ -342,6 +342,13 @@ public class TestFile extends File {
         return this;
     }
 
+    public TestFile assertIsDifferentFrom(TestFile other) {
+        assertIsFile();
+        other.assertIsFile();
+        assertHasChangedSince(other.snapshot());
+        return this;
+    }
+
     private byte[] getHash(String algorithm) {
         try {
             MessageDigest messageDigest = MessageDigest.getInstance(algorithm);
@@ -357,11 +364,7 @@ public class TestFile extends File {
     }
 
     public void createLink(String target) {
-        try {
-            NativeServices.getInstance().get(FileSystem.class).createSymbolicLink(this, new File(target));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        NativeServices.getInstance().get(FileSystem.class).createSymbolicLink(this, new File(target));
     }
 
     public String readLink() {

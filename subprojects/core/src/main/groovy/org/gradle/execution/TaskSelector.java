@@ -15,66 +15,105 @@
  */
 package org.gradle.execution;
 
-import com.google.common.collect.SetMultimap;
+import org.gradle.api.Nullable;
+import org.gradle.api.Project;
 import org.gradle.api.Task;
-import org.gradle.api.Transformer;
 import org.gradle.api.internal.GradleInternal;
 import org.gradle.api.internal.project.ProjectInternal;
+import org.gradle.api.specs.Spec;
 import org.gradle.execution.taskpath.ResolvedTaskPath;
 import org.gradle.execution.taskpath.TaskPathResolver;
-import org.gradle.util.CollectionUtils;
 import org.gradle.util.NameMatcher;
 
-import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 
 public class TaskSelector {
     private final TaskNameResolver taskNameResolver;
     private final GradleInternal gradle;
+    private final ProjectConfigurer configurer;
     private final TaskPathResolver taskPathResolver = new TaskPathResolver();
 
-    public TaskSelector(GradleInternal gradle) {
-        this(gradle, new TaskNameResolver());
+    public TaskSelector(GradleInternal gradle, ProjectConfigurer projectConfigurer) {
+        this(gradle, new TaskNameResolver(), projectConfigurer);
     }
 
-    public TaskSelector(GradleInternal gradle, TaskNameResolver taskNameResolver) {
+    public TaskSelector(GradleInternal gradle, TaskNameResolver taskNameResolver, ProjectConfigurer configurer) {
         this.taskNameResolver = taskNameResolver;
         this.gradle = gradle;
+        this.configurer = configurer;
     }
 
     public TaskSelection getSelection(String path) {
-        SetMultimap<String, TaskSelectionResult> tasksByName;
-        ProjectInternal project = gradle.getDefaultProject();
+        return getSelection(path, gradle.getDefaultProject());
+    }
+
+    public Spec<Task> getFilter(String path) {
+        final ResolvedTaskPath taskPath = taskPathResolver.resolvePath(path, gradle.getDefaultProject());
+        if (!taskPath.isQualified()) {
+            ProjectInternal targetProject = taskPath.getProject();
+            configurer.configure(targetProject);
+            TaskSelectionResult tasks = taskNameResolver.selectWithName(taskPath.getTaskName(), taskPath.getProject(), true);
+            if (tasks != null) {
+                // An exact match in the target project - can just filter tasks by path to avoid configuring sub-projects at this point
+                return new TaskPathSpec(targetProject, taskPath.getTaskName());
+            }
+        }
+
+        final Set<Task> selectedTasks = getSelection(path, gradle.getDefaultProject()).getTasks();
+        return new Spec<Task>() {
+            public boolean isSatisfiedBy(Task element) {
+                return !selectedTasks.contains(element);
+            }
+        };
+    }
+
+    public TaskSelection getSelection(@Nullable String projectPath, String path) {
+        ProjectInternal project = projectPath != null
+                ? gradle.getRootProject().findProject(projectPath)
+                : gradle.getDefaultProject();
+        return getSelection(path, project);
+    }
+
+    private TaskSelection getSelection(String path, ProjectInternal project) {
         ResolvedTaskPath taskPath = taskPathResolver.resolvePath(path, project);
-
+        ProjectInternal targetProject = taskPath.getProject();
         if (taskPath.isQualified()) {
-            tasksByName = taskNameResolver.select(taskPath.getTaskName(), taskPath.getProject());
+            configurer.configure(targetProject);
         } else {
-            tasksByName = taskNameResolver.selectAll(taskPath.getTaskName(), taskPath.getProject());
+            configurer.configureHierarchy(targetProject);
         }
 
-        Set<TaskSelectionResult> tasks = tasksByName.get(taskPath.getTaskName());
-        if (!tasks.isEmpty()) {
+        TaskSelectionResult tasks = taskNameResolver.selectWithName(taskPath.getTaskName(), taskPath.getProject(), !taskPath.isQualified());
+        if (tasks != null) {
             // An exact match
-            return new TaskSelection(path, tasks);
+            return new TaskSelection(taskPath.getProject().getPath(), path, tasks);
         }
 
+        Map<String, TaskSelectionResult> tasksByName = taskNameResolver.selectAll(taskPath.getProject(), !taskPath.isQualified());
         NameMatcher matcher = new NameMatcher();
         String actualName = matcher.find(taskPath.getTaskName(), tasksByName.keySet());
         if (actualName != null) {
-            return new TaskSelection(taskPath.getPrefix() + actualName, tasksByName.get(actualName));
+            return new TaskSelection(taskPath.getProject().getPath(), taskPath.getPrefix() + actualName, tasksByName.get(actualName));
         }
 
         throw new TaskSelectionException(matcher.formatErrorMessage("task", taskPath.getProject()));
     }
 
     public static class TaskSelection {
-        private String taskName;
-        private Collection<TaskSelectionResult> taskSelectionResult;
-        public TaskSelection(String taskName, Set<TaskSelectionResult> tasks) {
+        private final String projectPath;
+        private final String taskName;
+        private final TaskSelectionResult taskSelectionResult;
+
+        public TaskSelection(String projectPath, String taskName, TaskSelectionResult tasks) {
+            this.projectPath = projectPath;
             this.taskName = taskName;
             taskSelectionResult = tasks;
+        }
+
+        public String getProjectPath() {
+            return projectPath;
         }
 
         public String getTaskName() {
@@ -82,11 +121,31 @@ public class TaskSelector {
         }
 
         public Set<Task> getTasks() {
-            return CollectionUtils.collect(taskSelectionResult, new LinkedHashSet<Task>(), new Transformer<Task, TaskSelectionResult>() {
-                public Task transform(TaskSelectionResult original) {
-                    return original.getTask();
+            LinkedHashSet<Task> result = new LinkedHashSet<Task>();
+            taskSelectionResult.collectTasks(result);
+            return result;
+        }
+    }
+
+    private static class TaskPathSpec implements Spec<Task> {
+        private final ProjectInternal targetProject;
+        private final String taskName;
+
+        public TaskPathSpec(ProjectInternal targetProject, String taskName) {
+            this.targetProject = targetProject;
+            this.taskName = taskName;
+        }
+
+        public boolean isSatisfiedBy(Task element) {
+            if (!element.getName().equals(taskName)) {
+                return true;
+            }
+            for (Project current = element.getProject(); current != null; current = current.getParent()) {
+                if (current.equals(targetProject)) {
+                    return false;
                 }
-            });
+            }
+            return true;
         }
     }
 }

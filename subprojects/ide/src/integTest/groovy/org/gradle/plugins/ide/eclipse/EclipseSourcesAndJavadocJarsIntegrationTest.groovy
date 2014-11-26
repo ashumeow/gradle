@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 package org.gradle.plugins.ide.eclipse
-
 import org.gradle.plugins.ide.AbstractSourcesAndJavadocJarsIntegrationTest
-import org.gradle.test.fixtures.maven.HttpArtifact
+import org.gradle.test.fixtures.server.http.HttpArtifact
 
 class EclipseSourcesAndJavadocJarsIntegrationTest extends AbstractSourcesAndJavadocJarsIntegrationTest {
     @Override
@@ -29,6 +28,27 @@ class EclipseSourcesAndJavadocJarsIntegrationTest extends AbstractSourcesAndJava
         def lib = classpath.libs[0]
         assert lib.sourcePath.endsWith("/module-1.0-${sourcesClassifier}.jar")
         assert lib.javadocLocation.endsWith("/module-1.0-${javadocClassifier}.jar!/")
+    }
+
+    void ideFileContainsSourcesAndJavadocEntryForEachLib(String sourcesClassifier = "sources", String javadocClassifier = "javadoc") {
+        def classpath = new EclipseClasspathFixture(testDirectory, executer.gradleUserHomeDir)
+        classpath.libs.each {
+            assert it.sourcePath.endsWith("/module-1.0-${sourcesClassifier}.jar")
+            assert it.javadocLocation.endsWith("/module-1.0-${javadocClassifier}.jar!/")
+        }
+    }
+
+    void ideFileContainsArtifactsWithSourceEntries(Map<String, Map<String, String>> artifactSources) {
+        def classpath = new EclipseClasspathFixture(testDirectory, executer.gradleUserHomeDir)
+        assert classpath.libs.size() == artifactSources.size()
+
+        artifactSources.eachWithIndex {expectedModuleFileName, expectedSourceFileName, index ->
+            def lib = classpath.libs[index]
+
+            assert lib.jarPath.endsWith(expectedModuleFileName)
+            assert lib.sourcePath.endsWith(expectedSourceFileName["sources"])
+            assert lib.javadocLocation.endsWith("${expectedSourceFileName["javadoc"]}!/")
+        }
     }
 
     void ideFileContainsNoSourcesAndJavadocEntry() {

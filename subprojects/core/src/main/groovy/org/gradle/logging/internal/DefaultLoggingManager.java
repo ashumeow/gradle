@@ -20,12 +20,15 @@ import org.gradle.api.logging.LogLevel;
 import org.gradle.api.logging.StandardOutputListener;
 import org.gradle.internal.concurrent.CompositeStoppable;
 import org.gradle.internal.concurrent.Stoppable;
+import org.gradle.logging.ConsoleOutput;
 import org.gradle.logging.LoggingManagerInternal;
 
+import java.io.Closeable;
+import java.io.OutputStream;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-public class DefaultLoggingManager implements LoggingManagerInternal {
+public class DefaultLoggingManager implements LoggingManagerInternal, Closeable {
     private boolean started;
     private final StartableLoggingSystem loggingSystem;
     private final StartableLoggingSystem stdOutLoggingSystem;
@@ -79,6 +82,10 @@ public class DefaultLoggingManager implements LoggingManagerInternal {
         return this;
     }
 
+    public void close() {
+        stop();
+    }
+
     public DefaultLoggingManager setLevel(LogLevel logLevel) {
         loggingSystem.setLevel(logLevel);
         return this;
@@ -118,6 +125,14 @@ public class DefaultLoggingManager implements LoggingManagerInternal {
         }
     }
 
+    public void addStandardOutputListener(OutputStream outputStream) {
+        addStandardOutputListener(new StreamBackedStandardOutputListener(outputStream));
+    }
+
+    public void addStandardErrorListener(OutputStream outputStream) {
+        addStandardErrorListener(new StreamBackedStandardOutputListener(outputStream));
+    }
+
     public void removeStandardOutputListener(StandardOutputListener listener) {
         if (stdoutListeners.remove(listener) && started) {
             loggingOutput.removeStandardOutputListener(listener);
@@ -142,12 +157,18 @@ public class DefaultLoggingManager implements LoggingManagerInternal {
         }
     }
 
-    public void attachConsole(boolean colorOutput) {
-        loggingOutput.attachConsole(colorOutput);
+    public void removeAllOutputEventListeners() { loggingOutput.removeAllOutputEventListeners(); }
+
+    public void attachProcessConsole(ConsoleOutput consoleOutput) {
+        loggingOutput.attachProcessConsole(consoleOutput);
     }
 
-    public void addStandardOutputAndError() {
-        loggingOutput.addStandardOutputAndError();
+    public void attachAnsiConsole(OutputStream outputStream) {
+        loggingOutput.attachAnsiConsole(outputStream);
+    }
+
+    public void attachSystemOutAndErr() {
+        loggingOutput.attachSystemOutAndErr();
     }
 
     private static class StartableLoggingSystem implements Stoppable {

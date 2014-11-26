@@ -16,6 +16,7 @@
 package org.gradle.launcher.daemon.client
 
 import org.gradle.api.Nullable
+import org.gradle.initialization.DefaultBuildCancellationToken
 import org.gradle.internal.concurrent.DefaultExecutorFactory
 import org.gradle.internal.io.TextStream
 import spock.lang.Specification
@@ -29,6 +30,7 @@ import static org.gradle.util.TextUtil.toPlatformLineSeparators
 class InputForwarderTest extends Specification {
 
     def bufferSize = 1024
+    def cancellationToken = new DefaultBuildCancellationToken()
     def executerFactory = new DefaultExecutorFactory()
 
     def source = new PipedOutputStream()

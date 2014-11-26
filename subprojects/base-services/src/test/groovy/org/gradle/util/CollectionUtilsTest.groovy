@@ -40,6 +40,18 @@ class CollectionUtilsTest extends Specification {
         filter(4, 5, 6) == [4]
     }
 
+    def "array filtering"() {
+        given:
+        def spec = Specs.convertClosureToSpec { it < 5 }
+        def filter = { Integer[] nums -> filter(nums, spec) }
+
+        expect:
+        filter(1, 2, 3) == [1, 2, 3]
+        filter(7, 8, 9) == []
+        filter() == []
+        filter(4, 5, 6) == [4]
+    }
+
     def "list collecting"() {
         def transformer = new Transformer() {
             def transform(i) { i * 2 }
@@ -172,10 +184,10 @@ class CollectionUtilsTest extends Specification {
         expect:
         intersection([collA, collB]) == collC
         where:
-        collA              | collB            | collC
-        []                 | ["a", "b", "c"]  | []
-        ['a', 'b', 'c']    | ["a", "b", "c"]  | ['a', 'b', 'c']
-        ['a', 'b', 'c']    | ["b", "c"]       | ['b', 'c']
+        collA           | collB           | collC
+        []              | ["a", "b", "c"] | []
+        ['a', 'b', 'c'] | ["a", "b", "c"] | ['a', 'b', 'c']
+        ['a', 'b', 'c'] | ["b", "c"]      | ['b', 'c']
     }
 
     def "flattenToList"() {
@@ -289,9 +301,16 @@ class CollectionUtilsTest extends Specification {
         toSet([]).empty
     }
 
+    def "to list"() {
+        expect:
+        toList([1, 2, 3] as Set) == [1, 2, 3]
+        toList([]).empty
+        toList(([1, 2, 3] as Vector).elements()) == [1, 2, 3]
+    }
+
     def "sorting with comparator"() {
         given:
-        def naturalComparator = { a, b -> a<=>b } as Comparator
+        def naturalComparator = { a, b -> a <=> b } as Comparator
 
         expect:
         def l = [1, 2, 3]
@@ -315,6 +334,25 @@ class CollectionUtilsTest extends Specification {
         sort([]) == []
         sort([] as Set) == []
     }
+
+    def "grouping"() {
+        expect:
+        groupBy([1, 2, 3], transformer { "a" }).asMap() == ["a": [1, 2, 3]]
+        groupBy(["a", "b", "c"], transformer { it.toUpperCase() }).asMap() == ["A": ["a"], "B": ["b"], "C": ["c"]]
+        groupBy([], transformer { throw new AssertionError("shouldn't be called") }).isEmpty()
+    }
+
+    def unpack() {
+        expect:
+        unpack([{ 1 } as org.gradle.internal.Factory, { 2 } as org.gradle.internal.Factory, { 3 } as org.gradle.internal.Factory]).toList() == [1, 2, 3]
+        unpack([]).toList().isEmpty()
+    }
+
+    def nonEmptyOrNull() {
+        expect:
+        nonEmptyOrNull([1, 2, 3]) == [1, 2, 3]
+        nonEmptyOrNull([]) == null
+        }
 
     Spec<?> spec(Closure c) {
         Specs.convertClosureToSpec(c)

@@ -34,7 +34,7 @@ model introduced by the new language plugins:
 
 - Split `gradle tasks` into 'what can I do with this build?' and a 'what are all the tasks in this project?'.
 
-### GRADLE-2434 - IDE visualises and runs task selectors
+### GRADLE-2434 - IDE visualises and runs task selectors (DONE)
 
 On the command-line I can run `gradle test` and this will find and execute all tasks with name `test` in the current project
 and all its subprojects.
@@ -43,7 +43,7 @@ Expose some information to allow the IDE to visualise this and execute builds in
 
 See [tooling-api-improvements.md](tooling-api-improvements.md#story-gradle-2434---expose-the-aggregate-tasks-for-a-project)
 
-### IDE hides implementation tasks
+### IDE hides implementation tasks (DONE)
 
 On the command-line I can run `gradle tasks` and see the public tasks for the build, and `gradle tasks --all` to see all the tasks.
 
@@ -185,7 +185,7 @@ Once the new DSL is stabilised we will deprecate and remove the `scopes` map.
     - Include JvmLibrary main artifact in query results
     - Replace `IdeDependenciesExtractor.extractRepoFileDependencies` with single ArtifactResolutionQuery
 
-## Feature - Tooling API client cancels an operation
+## Feature - Tooling API client cancels an operation (DONE)
 
 Add some way for a tooling API client to request that an operation be cancelled.
 
@@ -193,6 +193,20 @@ The implementation will do the same thing as if the daemon client is disconnecte
 Later stories incrementally add more graceful cancellation handling.
 
 See [tooling-api-improvements.md](tooling-api-improvements.md#story-tooling-api-client-cancels-a-long-running-operation)
+
+## Feature - Expose dependency resolution problems
+
+- For the following kinds of failures:
+    - Missing or broken module version
+    - Missing or broken jar
+    - Missing or broken source and javadoc artifact
+- Change the IDE plugins to warn for each such problem it ignores, and fail on all others.
+- Change the tooling model include the failure details for each such problem.
+
+### Test coverage
+
+- Change the existing IDE plugin int tests to verify the warning is produced in each of the above cases.
+- Add test coverage for the tooling API to cover the above cases.
 
 ## Feature - Expose build script compilation details
 
@@ -249,12 +263,6 @@ Expose the corresponding Eclipse and IDEA model.
 Expose Scala language level and other details about a Scala component.
 
 Expose the corresponding Eclipse and IDEA model.
-
-### Story - Expose the publications of a project
-
-See [tooling-api-improvements.md](tooling-api-improvements.md#story-expose-the-publications-of-a-project):
-
-Expose the publications of a project so that the IDE can wire together Gradle and Maven builds.
 
 ### Story - Expose Web components to the IDE
 
@@ -319,7 +327,6 @@ Extend the above mechanism to support prompting the user, when running via the t
 Some more features to mix into the above plan:
 
 - Honour same environment variables as command-line `gradle` invocation.
-- Cancelled build is gracefully stopped
 - Richer events during execution:
     - Task execution
     - Custom events

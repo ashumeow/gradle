@@ -42,46 +42,33 @@ to use this same mechanism is one step in this direction.
 
 # Implementation plan
 
-## Story: Expose the build script of a project
+## Feature: Expose the compile details of a build script
 
-This story exposes via the tooling API some basic information about the build script of a project.
+This feature exposes some information about how a build script will be compiled. This information can be used by an
+IDE to provide some basic content assistance for a build script.
 
-1. Add a `GradleScript` type with the following properties:
-    1. A `file` property with type `File`.
-2. Add a `buildScript` property to `GradleProject` with type `GradleScript`.
-3. Include an `@since` javadoc tag and an `@Incubating` annotation on the new types and methods.
-4. Change `GradleProjectBuilder` to populate the model.
+## Story: Expose the Groovy version used for a build script
 
-An example usage:
-
-    GradleProject project = connection.getModel(GradleProject.class);
-    System.out.println("project " + project.getPath() + " uses script " + project.getBuildScript().getFile());
+Add a `groovyVersion` property to `GradleScript` to expose the Groovy version that is used.
 
 ### Test coverage
 
-- Add a new `ToolingApiSpecification` integration test class that covers:
-    - A project with standard build script location
-    - A project with customized build script location
-- Verify that a decent error message is received when using a Gradle version that does not expose the build scripts.
-    - Request `GradleProject` directly.
-    - Using `GradleProject` via an `EclipseProject` or `IdeaModule`.
+## Story: Expose the default imports used for a build script
 
-## Story: Expose the compile details of a build script
+Add a `defaultImports` property to `GradleScript` to expose the default imports applied to the script.
 
-This story exposes some information about how a build script will be compiled. This information can be used by an
-IDE to provide some basic content assistance for a build script.
+### Test coverage
+
+## Story: Expose the classpath used for a build script
 
 1. Introduce a new hierarchy to represent a classpath element. Retrofit the IDEA and Eclipse models to use this.
     - Should expose a set of files, a set of source archives and a set of API docs.
 2. Add `compileClasspath` property to `GradleScript` to expose the build script classpath.
-3. Include the Gradle API and core plugins in the script classpath.
+3. Script classpath includes the Gradle API and core plugins
     - Should include the source and Javadoc
-4. Add a `groovyVersion` property to `GradleScript` to expose the Groovy version that is used.
-
-### Open issues
-
-- Need to flesh out the classpath types.
-- Will need to use Eclipse and IDEA specific classpath models
+4. Script classpath includes the libraries declared in the `buildscript { }` block.
+5. Script classpath includes the plugins declared in the `plugins { }` block.
+6. Script classpath includes the libraries inherited from parent project.
 
 ### Test coverage
 
@@ -92,6 +79,17 @@ IDE to provide some basic content assistance for a build script.
     - Classpath declared in script of ancestor project is included in the classpath.
     - Source and Javadoc artifacts for the above are included in the classpath.
 - Verify that a decent error message is received when using a Gradle version that does not expose the build script classpath.
+
+### Open issues
+
+- Need to flesh out the classpath types.
+- Will need to use Eclipse and IDEA specific classpath models
+
+## Story: Tooling API client requests build script details for a given file
+
+Add a way to take a file path and request a `BuildScript` model for it.
+
+## Feature: Custom tooling models
 
 ## Story: Gradle plugin provides a custom tooling model to the tooling API client
 
@@ -112,7 +110,7 @@ This story allows a custom plugin to expose a tooling model to any tooling API c
 - Generalise `UnsupportedModelFeedbackCrossVersionSpec`.
 - Plugin attempts to register a model that some other plugin already has registered.
 
-## Story: Tooling API client builds a complex tooling model in a single batch operation
+## Story: Tooling API client builds a complex tooling model in a single batch operation (DONE)
 
 This story adds support for a tooling API to query portions of the Gradle model in an efficient way.
 
@@ -214,7 +212,7 @@ Note: there is a breaking change here.
 
 When the `GradleBuild` model is requested, execute only the settings script, and don't configure any of the projects.
 
-## Story: Tooling API client determines whether model is available
+## Story: Tooling API client determines whether model is available (DONE)
 
 This story adds support for conditionally requesting a model, if it is available
 
@@ -232,79 +230,51 @@ This story adds support for conditionally requesting a model, if it is available
 
 Fix the `ClassLoader` caching in the tooling API so that it can deal with changing implementations.
 
-## Story: GRADLE-2434 - Expose the aggregate tasks for a project
-
-This story allows an IDE to implement a way to select the tasks to execute based on their name, similar to the Gradle command-line.
-
-1. Add an `EntryPoint` model interface, which represents some arbitrary entry point to the build.
-2. Add a `TaskSelector` model interface, which represents an entry point that uses a task name to select the tasks to execute.
-3. Change `GradleTask` to extend `EntryPoint`, so that each task can be used as an entry point.
-4. Add a method to `GradleProject` to expose the task selectors for the project.
-    - For new target Gradle versions, delegate to the provider.
-    - For older target Gradle versions, use a client-side mix-in that assembles the task selectors using the information available in `GradleProject`.
-5. Add methods to `BuildLauncher` to allow a sequence of entry points to be used to specify what the build should execute.
-6. Add `@since` and `@Incubating` to the new types and methods.
-
-Here are the above types:
-
-    interface EntryPoint {
-    }
-
-    interface TaskSelector extends EntryPoint {
-        String getName(); // A display name
-    }
-
-    interface GradleTask extends EntryPoint {
-        ...
-    }
-
-    interface GradleProject {
-        DomainObjectSet<? extends TaskSelector> getTaskSelectors();
-        ...
-    }
-
-    interface BuildLauncher {
-        BuildLauncher forTasks(Iterable<? extends EntryPoint> tasks);
-        BuildLauncher forTasks(EntryPoint... tasks);
-        ...
-    }
-
-TBD - maybe don't change `forTasks()` but instead add an `execute(Iterable<? extends EntryPoint> tasks)` method.
-
-### Test cases
-
-- Can request the entry points for a given project hierarchy
-    - Task is present in some subprojects but not the target project
-    - Task is present in target project but no subprojects
-    - Task is present in target project and some subprojects
-- Executing a task selector when task is also present in subprojects runs all the matching tasks, for the above cases.
-- Can execute a task selector from a child project. Verify the tasks from the child project are executed.
-- Executing a task (as an `EntryPoint`) when task is also present in subprojects run the specified task only and nothing from subprojects.
-- Can request the entry points for all target Gradle versions.
-
-## Story: Tooling API client launches a build using task selectors from different projects
+## Story: Tooling API client launches a build using task selectors from different projects (DONE)
 
 TBD
 
 ### Test cases
 
 - Can execute task selectors from multiple projects, for all target Gradle versions
+- Can execute overlapping task selectors.
 
-## Story: Tooling API exposes project's implicit tasks as launchable
+## Story: Tooling API exposes project's implicit tasks as launchable (DONE)
 
-TBD
+Change the building of the `BuildInvocations` model so that:
+
+- `getTasks()` includes the implicit tasks of the project.
+- `getTaskSelectors()` includes the implicit tasks of the project and all its subprojects.
 
 ### Test cases
 
-- `BuildInvocations.getTasks()` includes the `help` and other implicit tasks. Running the task instance runs the appropriate task.
-- `BuildInvocations.getTaskSelectors()` includes the `help` and other implicit tasks. Running the selector instance runs the appropriate task only (e.g. `help` at the
-root of a multi-project build runs `help` in the root project only.
+- `BuildInvocations.getTasks()` includes `help` and other implicit tasks.
+    - Launching a build using one of these task instances runs the appropriate task.
+- `BuildInvocations.getTaskSelectors()` includes the `help` and other implicit tasks.
+    - Launching a build using the `dependencies` selector runs the task in the default project only (this is the behaviour on the command-line).
+- A project defines a task placeholder. This should be visible in the `BuildInvocations` model for the project and for the parent of the project.
+    - Launching a build using the selector runs the task.
 
-## Story: Expose information about the visibility of a task
+## Story: Expose information about the visibility of a task (DONE)
 
 This story allows the IDE to hide those tasks that are part of the implementation details of a build.
 
-## Story: Tooling API build action requests a tooling model for a Gradle build
+- Add a `visibility` property to `Launchable`.
+- A task is considered `public` when it has a non-empty `group` property, otherwise it is considered `private`.
+- A task selector is considered `public` when any task it selects is `public`, otherwise it is considered `private`.
+
+### Test cases
+
+- A project defines a public and private task.
+    - The `BuildInvocations` model for the project includes task instances with the correct visibility.
+    - The `BuildInvocations` model for the project includes task selectors with the correct visibility.
+    - The `BuildInvocations` model for the parent project includes task selectors with the correct visibility.
+
+## Story: Allow options to be specified for tasks
+
+For example, allow something similar to `gradle test --tests SomePattern`
+
+## Story: Tooling API build action requests a tooling model for a Gradle build (DONE)
 
 This story adds support to build models that have a scope of a whole Gradle build (not just a project)
 
@@ -325,79 +295,11 @@ This story adds support to build models that have a scope of a whole Gradle buil
   - And get result from `ToolingModelBuilder` for project scope if passing one of parameters describing project.
 - Client receives decent feedback when requests an unknown model.
 
-## Story: Tooling API client cancels a long running operation
+### Open issues
 
-Represent the execution of a long running operation using a `Future`. This `Future` can be used to cancel the operation.
+- A model builder should simply be a rule with some tooling model as output, and whatever it needs declared as inputs.
 
-    interface BuildFuture<T> extends Future<T> {
-        void onSuccess(Action<? super T> action); // called immediately if the operation has completed successfully
-        void onFailure(Action<? super GradleConnectionException> action); // called immediately if the operation has failed
-        void onComplete(ResultHandler<? super T> handler); // called immediately if the operation has completed successfully
-    }
-
-    interface ModelBuilder<T> {
-        BuildInvocation<T> fetch(); // starts building the model, does not block
-        ...
-    }
-
-    interface BuildLauncher {
-        BuildInvocation<Void> start(); // starts running the build, does not block
-        ...
-    }
-
-    interface BuildActionExecuter<T> {
-        BuildInvocation<T> start(); // starts running the build, does not block
-        ...
-    }
-
-    BuildFuture<GradleProject> model = connection.model(GradleProject.class).fetch();
-    model.cancel(true);
-
-    BuildFuture<Void> build = connection.newBuild().forTasks('a').start();
-    build.get();
-
-    BuildFuture<CustomModel> action = connection.action(new MyAction()).start();
-    CustomModel m = action.get();
-
-### Implementation
-
-The overall plan is to start close to the client and gradually move the asynchronous execution and cancellation closer
-to the build:
-
-Use futures to represent the existing asynchronous behaviour:
-
-1. Change internal class `BlockingResultHandler` to implement `BuildInvocation` and reuse this type to implement the futures.
-2. Implementation should discard handlers once they have been notified, so they can be garbage collected.
-
-Push asynchronous execution down to the provider:
-
-1. Change `AsyncConsumerActionExecutor.run()` to return a future (not necessarily a `Future`) instead of accepting a
-   result handler.
-2. Rework `DefaultAsyncConsumerActionExecutor` and `LazyConsumerActionExecutor` into a lazy `AsyncConsumerActionExecutor`
-   implementation that composes two asynchronous operations into a single operation, represented by a composite future. The
-   first operation creates the real `AsyncConsumerActionExecutor` (possibly downloading the distribution) and the second dispatches
-   the client action to this executor once it is available.
-3. Add a new asynchronous protocol interface similar to `AsyncConsumerActionExecutor` that allows actions to be queued up for
-   execution, returning a future representing the result.
-4. For provider connections that implement this protocol interface, delegate to the provider to execute the action. For
-   connections that do not, adapt the connection in the client.
-
-Forward cancellation requests to the daemon:
-
-1. When `Future.cancel()` is called by the client, close the daemon connection. The daemon will stop the build and exit.
-
-For target versions that do not support cancellation, `Future.cancel()` always returns false.
-
-### Test cases
-
-- Client blocks until results available when using `get()`
-- Client receives failure when using `get()` and operation fails
-- Client receives timeout exception when blocking with timeout
-- Client can cancel operation
-    - Stops the operation for all target versions that support cancellation
-    - Returns `false` for all older target versions
-- Client is notified when result is available
-- Client is notified when operation fails
+## Feature: Expose more details about the project
 
 ## Story: Expose the IDE output directories
 
@@ -442,5 +344,7 @@ Need to allow a debug port to be specified, as hard-coded port 5005 can conflict
 * Replace `LongRunningOperation.standardOutput` and `standardError` with overloads that take a `Writer`, and (later) deprecate the `OutputStream` variants.
 * Handle cancellation during the Gradle distribution download.
 * Daemon cleanly stops the build when cancellation is requested.
+* Change the tooling API protocol to allow the provider to inform the consumer that it is deprecated and/or no longer supported, and fix the exception
+  handling in the consumer to deal with this.
 * Test fixtures should stop daemons at end of test when custom user home dir is used.
-* Introduce a `GradleExecutor` implementation backed by the tooling API.
+* Introduce a `GradleExecutor` implementation backed by the tooling API and remove the in-process executor.

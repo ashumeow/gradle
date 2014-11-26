@@ -16,13 +16,9 @@
 
 package org.gradle.api.publish.ivy
 
-import org.gradle.integtests.fixtures.executer.ExecutionFailure
-import org.gradle.test.fixtures.ivy.IvySftpRepository
+import org.gradle.test.fixtures.server.sftp.IvySftpRepository
 import org.gradle.test.fixtures.server.sftp.SFTPServer
-import org.gradle.util.Requires
-import org.gradle.util.TestPrecondition
 import org.junit.Rule
-import spock.lang.Ignore
 import spock.lang.Unroll
 
 @Unroll
@@ -31,11 +27,38 @@ class IvyPublishSftpIntegrationTest extends AbstractIvyPublishIntegTest {
     @Rule
     final SFTPServer server = new SFTPServer(this)
 
-    IvySftpRepository getIvySftpRepo(boolean m2Compatible, String dirPattern = null) {
+    IvySftpRepository getIvySftpRepo(boolean m2Compatible = false, String dirPattern = null) {
         new IvySftpRepository(server, '/repo', m2Compatible, dirPattern)
     }
 
-    @Requires(TestPrecondition.JDK6_OR_LATER)
+    private void buildAndSettingsFilesForPublishing() {
+        settingsFile << 'rootProject.name = "publish"'
+        buildFile << """
+            apply plugin: 'java'
+            apply plugin: 'ivy-publish'
+
+            version = '2'
+            group = 'org.group.name'
+
+            publishing {
+                repositories {
+                    ivy {
+                        url "${ivySftpRepo.uri}"
+                        credentials {
+                            username 'sftp'
+                            password 'sftp'
+                        }
+                    }
+                }
+                publications {
+                    ivy(IvyPublication) {
+                        from components.java
+                    }
+                }
+            }
+        """
+    }
+
     def "can publish to a SFTP repository with layout #layout"() {
         given:
         def ivySftpRepo = getIvySftpRepo(m2Compatible)
@@ -69,9 +92,13 @@ class IvyPublishSftpIntegrationTest extends AbstractIvyPublishIntegTest {
         """
 
         when:
-        succeeds 'publish'
+        module.jar.expectMkdirs()
+        module.jar.expectFileAndSha1Upload()
+        module.ivy.expectFileAndSha1Upload()
 
         then:
+        succeeds 'publish'
+
         module.assertIvyAndJarFilePublished()
         module.jarFile.assertIsCopyOf(file('build/libs/publish-2.jar'))
 
@@ -81,8 +108,7 @@ class IvyPublishSftpIntegrationTest extends AbstractIvyPublishIntegTest {
         'maven'  | true
     }
 
-    @Requires(TestPrecondition.JDK6_OR_LATER)
-    def "can publish to a SFTP repository with pattern layout and m2Compatible: #m2Compatible"() {
+    def "can publish to a SFTP repository with pattern layout and m2Compatible #m2Compatible"() {
         given:
         def ivySftpRepo = getIvySftpRepo(m2Compatible, "[module]/[organisation]/[revision]")
         def module = ivySftpRepo.module("org.group.name", "publish", "2")
@@ -119,9 +145,13 @@ class IvyPublishSftpIntegrationTest extends AbstractIvyPublishIntegTest {
         """
 
         when:
-        succeeds 'publish'
+        module.jar.expectMkdirs()
+        module.jar.expectFileAndSha1Upload()
+        module.ivy.expectFileAndSha1Upload()
 
         then:
+        succeeds 'publish'
+
         module.assertIvyAndJarFilePublished()
         module.jarFile.assertIsCopyOf(file('build/libs/publish-2.jar'))
 
@@ -129,48 +159,43 @@ class IvyPublishSftpIntegrationTest extends AbstractIvyPublishIntegTest {
         m2Compatible << [true, false]
     }
 
-    @Ignore
-    @Requires(TestPrecondition.JDK5)
-    def "cannot publish to a SFTP repository with layout #layout for incompatible Java version"() {
+    def "publishing to a SFTP repo when directory creation fails"() {
         given:
-        def ivySftpRepo = getIvySftpRepo(m2Compatible)
-
-        settingsFile << 'rootProject.name = "publish"'
-        buildFile << """
-            apply plugin: 'java'
-            apply plugin: 'ivy-publish'
-
-            version = '2'
-            group = 'org.group.name'
-
-            publishing {
-                repositories {
-                    ivy {
-                        url "${ivySftpRepo.uri}"
-                        credentials {
-                            username 'sftp'
-                            password 'sftp'
-                        }
-                        layout "$layout"
-                    }
-                }
-                publications {
-                    ivy(IvyPublication) {
-                        from components.java
-                    }
-                }
-            }
-        """
+        buildAndSettingsFilesForPublishing()
 
         when:
-        ExecutionFailure failure = fails 'publish'
+        def directory = '/repo/org.group.name/publish/2'
+        directory.tokenize('/').findAll().inject('') { path, token ->
+            def currentPath = "$path/$token"
+            server.expectLstat(currentPath)
+            currentPath
+        }
+        server.expectMkdirBroken('/repo')
 
         then:
-        failure.error.contains("The use of SFTP repositories requires Java 6 or later.")
+        fails 'publish'
+        failure.assertHasDescription("Execution failed for task ':publishIvyPublicationToIvyRepository'.")
+                .assertHasCause("Failed to publish publication 'ivy' to repository 'ivy'")
+                .assertHasCause("Could not create resource 'sftp://$ivySftpRepo.uri.host:$ivySftpRepo.uri.port/repo'.")
+    }
 
-        where:
-        layout   | m2Compatible
-        'gradle' | false
-        'maven'  | true
+    def "publishing to a SFTP repo when file uploading fails"() {
+        given:
+        buildAndSettingsFilesForPublishing()
+        def module = ivySftpRepo.module('org.group.name', 'publish', '2')
+
+        when:
+        server.expectLstat('/repo/org.group.name/publish/2')
+        module.jar.expectMkdirs()
+        module.jar.expectOpen()
+        module.jar.expectWriteBroken()
+        // TODO - should not need this request, should be CLOSE instead
+        module.jar.expectStat()
+
+        then:
+        fails 'publish'
+        failure.assertHasDescription("Execution failed for task ':publishIvyPublicationToIvyRepository'.")
+                .assertHasCause("Failed to publish publication 'ivy' to repository 'ivy'")
+                .assertHasCause("Could not write to resource 'sftp://${ivySftpRepo.uri.host}:${ivySftpRepo.uri.port}${module.jar.pathOnServer}'.")
     }
 }

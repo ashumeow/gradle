@@ -47,10 +47,14 @@ public class GenerateBuildDashboard extends DefaultTask implements Reporting<Bui
     @Nested
     private final DefaultBuildDashboardReports reports;
 
-    @Inject
-    public GenerateBuildDashboard(Instantiator instantiator) {
-        reports = instantiator.newInstance(DefaultBuildDashboardReports.class, this);
+    public GenerateBuildDashboard() {
+        reports = getInstantiator().newInstance(DefaultBuildDashboardReports.class, this);
         reports.getHtml().setEnabled(true);
+    }
+
+    @Inject
+    protected Instantiator getInstantiator() {
+        throw new UnsupportedOperationException();
     }
 
     @Input
@@ -124,8 +128,8 @@ public class GenerateBuildDashboard extends DefaultTask implements Reporting<Bui
     @TaskAction
     void run() {
         if (getReports().getHtml().isEnabled()) {
-            BuildDashboardGenerator generator = new BuildDashboardGenerator(getEnabledInputReports(), reports.getHtml().getEntryPoint());
-            generator.generate();
+            BuildDashboardGenerator generator = new BuildDashboardGenerator();
+            generator.render(getEnabledInputReports(), reports.getHtml().getEntryPoint());
         } else {
             setDidWork(false);
         }

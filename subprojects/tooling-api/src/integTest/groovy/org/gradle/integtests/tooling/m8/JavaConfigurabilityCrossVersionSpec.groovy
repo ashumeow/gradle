@@ -16,22 +16,18 @@
 
 package org.gradle.integtests.tooling.m8
 
-import org.gradle.integtests.tooling.fixture.TargetGradleVersion
 import org.gradle.integtests.tooling.fixture.ToolingApiSpecification
-import org.gradle.integtests.tooling.fixture.ToolingApiVersion
 import org.gradle.tooling.model.GradleProject
 import org.gradle.tooling.model.build.BuildEnvironment
 import spock.lang.Issue
 import spock.lang.Timeout
 
-@ToolingApiVersion('>=1.0-milestone-8')
-@TargetGradleVersion('>=1.0-milestone-8')
 class JavaConfigurabilityCrossVersionSpec extends ToolingApiSpecification {
 
     def setup() {
         //this test does not make any sense in embedded mode
         //as we don't own the process
-        toolingApi.isEmbedded = false
+        toolingApi.requireDaemons()
     }
 
     def "configures the java settings"() {

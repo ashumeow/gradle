@@ -16,8 +16,7 @@
 package org.gradle.api.internal
 
 import org.gradle.api.DomainObjectCollection
-
-import spock.lang.*
+import spock.lang.Specification
 
 class CompositeDomainObjectSetTest extends Specification {
 
@@ -30,7 +29,7 @@ class CompositeDomainObjectSetTest extends Specification {
     }
 
     protected composite(DomainObjectCollection... collections) {
-        new CompositeDomainObjectSet(type, *collections)
+        CompositeDomainObjectSet.create(type, *collections)
     }
 
     def "empty composite contains no elements"() {

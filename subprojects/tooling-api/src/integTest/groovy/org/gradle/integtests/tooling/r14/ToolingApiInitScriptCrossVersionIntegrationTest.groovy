@@ -27,7 +27,7 @@ import spock.lang.Issue
  * Tests that init scripts are used from the _clients_ GRADLE_HOME, not the daemon server's.
  */
 @TargetGradleVersion('>=1.4')
-@Issue("http://issues.gradle.org/browse/GRADLE-2408")
+@Issue("https://issues.gradle.org/browse/GRADLE-2408")
 class ToolingApiInitScriptCrossVersionIntegrationTest extends ToolingApiSpecification {
 
     TestFile createDistribution(int i) {
@@ -43,10 +43,9 @@ class ToolingApiInitScriptCrossVersionIntegrationTest extends ToolingApiSpecific
     }
 
     String runWithInstallation(TestFile gradleHome) {
+        toolingApi.requireIsolatedDaemons()
         toolingApi.withConnector { GradleConnector it ->
             it.useInstallation(new File(gradleHome.absolutePath))
-            it.useGradleUserHomeDir(temporaryFolder.file("user home"))
-            it.embedded(false)
         }
         withBuild { it.forTasks("echo") }.standardOutput
     }

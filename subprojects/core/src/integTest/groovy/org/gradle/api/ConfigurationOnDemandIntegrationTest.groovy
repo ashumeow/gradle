@@ -156,7 +156,7 @@ project(':api') {
         fixture.assertProjectsConfigured(":", ":api", ':impl')
     }
 
-    def "follows project dependencies when ran in subproject"() {
+    def "follows project dependencies when run in subproject"() {
         settingsFile << "include 'api', 'impl', 'util'"
 
         file("api/build.gradle") << "configurations { api }"
@@ -330,5 +330,178 @@ project(':api') {
 
         then:
         fixture.assertProjectsConfigured(":", ":a", ":b")
+    }
+
+    def "handles buildNeeded"() {
+        settingsFile << "include 'a', 'b', 'c'"
+        file("a/build.gradle") << """ apply plugin: 'java' """
+        file("b/build.gradle") << """
+            apply plugin: 'java'
+            project(':b') {
+                dependencies { compile project(':a') }
+            }
+        """
+
+        when:
+        run(":b:buildNeeded")
+
+        then:
+        result.executedTasks.containsAll ':b:buildNeeded', ':a:buildNeeded'
+        fixture.assertProjectsConfigured(":", ":b", ":a")
+    }
+
+    def "handles buildDependents"() {
+        settingsFile << "include 'a', 'b', 'c'"
+        file("a/build.gradle") << """ apply plugin: 'java' """
+        file("b/build.gradle") << """
+            apply plugin: 'java'
+            project(':b') {
+                dependencies { compile project(':a') }
+            }
+        """
+
+        when:
+        run(":a:buildDependents")
+
+        then:
+        result.executedTasks.containsAll ':b:buildDependents', ':a:buildDependents'
+        //unfortunately buildDependents requires all projects to be configured
+        fixture.assertProjectsConfigured(":", ":a", ":b", ":c")
+    }
+
+    def "task command-line argument may look like a task path"() {
+        settingsFile << "include 'a', 'b', 'c'"
+        file("a/build.gradle") << """
+task one(type: SomeTask)
+task two(type: SomeTask)
+
+class SomeTask extends DefaultTask {
+    @org.gradle.api.internal.tasks.options.Option(description="some value")
+    String value
+}
+"""
+
+        when:
+        run(":a:one", "--value", ":b:thing", "a:two", "--value", "unknown:unknown")
+
+        then:
+        result.assertTasksExecuted(":a:one", ":a:two")
+        fixture.assertProjectsConfigured(":", ":a")
+    }
+
+    def "does not configure all projects when excluded task path is not qualified and is exact match for task in default project"() {
+        settingsFile << "include 'a', 'a:child', 'b', 'b:child', 'c'"
+        file('a').mkdirs()
+        file('b').mkdirs()
+        buildFile << """
+allprojects {
+    task one
+    task two
+    task three
+}
+"""
+
+        when:
+        run(":a:one", "-x", "two", "-x", "three")
+
+        then:
+        result.assertTasksExecuted(":a:one")
+        fixture.assertProjectsConfigured(":", ":a")
+
+        when:
+        executer.usingProjectDirectory(file('a'))
+        run(":a:one", "-x", "two", "-x", "three")
+
+        then:
+        result.assertTasksExecuted(":a:one")
+        fixture.assertProjectsConfigured(":", ":a")
+
+        when:
+        executer.usingProjectDirectory(file('b'))
+        run(":a:one", "-x", "two", "-x", "three")
+
+        then:
+        result.assertTasksExecuted(":a:one")
+        fixture.assertProjectsConfigured(":", ":b", ":a")
+    }
+
+    def "does not configure all projects when excluded task path is not qualified and an exact match for task has already been seen in some sub-project of default project"() {
+        settingsFile << "include 'a', 'b', 'c', 'c:child'"
+        file('c').mkdirs()
+        buildFile << """
+allprojects {
+    task one
+}
+project(':b') {
+    task two
+}
+"""
+
+        when:
+        run(":a:one", "-x", "two")
+
+        then:
+        result.assertTasksExecuted(":a:one")
+        fixture.assertProjectsConfigured(":", ":a")
+
+        when:
+        executer.usingProjectDirectory(file("c"))
+        runAndFail(":a:one", "-x", "two")
+
+        then:
+        failure.assertHasDescription("Task 'two' not found in project ':c'.")
+        fixture.assertProjectsConfigured(":", ":c", ':c:child')
+    }
+
+    def "configures all subprojects of default project when excluded task path is not qualified and an exact match not found in default project"() {
+        settingsFile << "include 'a', 'b', 'c', 'c:child'"
+        file('c').mkdirs()
+        buildFile << """
+allprojects {
+    task one
+}
+"""
+        file("b/build.gradle") << "task two"
+
+        when:
+        run(":a:one", "-x", "two")
+
+        then:
+        result.assertTasksExecuted(":a:one")
+        fixture.assertProjectsConfigured(":", ":a", ":b", ":c", ":c:child")
+
+        when:
+        executer.usingProjectDirectory(file("c"))
+        runAndFail(":a:one", "-x", "two")
+
+        then:
+        failure.assertHasDescription("Task 'two' not found in project ':c'.")
+        fixture.assertProjectsConfigured(":", ":c", ':c:child')
+    }
+
+    def "configures all subprojects of default projects when excluded task path is not qualified and uses camel case matching"() {
+        settingsFile << "include 'a', 'b', 'b:child', 'c'"
+        file('b').mkdirs()
+        buildFile << """
+allprojects {
+    task one
+    task two
+}
+"""
+
+        when:
+        run(":a:one", "-x", "tw")
+
+        then:
+        result.assertTasksExecuted(":a:one")
+        fixture.assertProjectsConfigured(":", ":a", ":b", ":c", ":b:child")
+
+        when:
+        executer.usingProjectDirectory(file('b'))
+        run(":a:one", "-x", "tw")
+
+        then:
+        result.assertTasksExecuted(":a:one")
+        fixture.assertProjectsConfigured(":", ":b", ":b:child", ":a")
     }
 }

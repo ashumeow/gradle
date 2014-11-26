@@ -16,15 +16,13 @@
 package org.gradle.tooling;
 
 import org.gradle.api.Incubating;
-import org.gradle.tooling.exceptions.UnsupportedBuildArgumentException;
-import org.gradle.tooling.exceptions.UnsupportedOperationConfigurationException;
 
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 
 /**
- * A {@code ModelBuilder} allows you to fetch a snapshot of the model for a project.
+ * A {@code ModelBuilder} allows you to fetch a snapshot of some model for a project or a build.
  * Instances of {@code ModelBuilder} are not thread-safe.
  * <p>
  * You use a {@code ModelBuilder} as follows:
@@ -90,6 +88,13 @@ public interface ModelBuilder<T> extends LongRunningOperation {
 
     /**
      * {@inheritDoc}
+     * @since 2.3
+     */
+    @Incubating
+    ModelBuilder<T> setColorOutput(boolean colorOutput);
+
+    /**
+     * {@inheritDoc}
      * @since 1.0-milestone-7
      */
     ModelBuilder<T> setStandardInput(InputStream inputStream);
@@ -113,6 +118,13 @@ public interface ModelBuilder<T> extends LongRunningOperation {
     ModelBuilder<T> addProgressListener(ProgressListener listener);
 
     /**
+     * {@inheritDoc}
+     * @since 2.3
+     */
+    @Incubating
+    ModelBuilder<T> withCancellationToken(CancellationToken cancellationToken);
+
+    /**
      * Specifies the tasks to execute before building the model. By default, no tasks are executed.
      *
      * @param tasks The paths of the tasks to be executed. Relative paths are evaluated relative to the project for which this launcher was created.
@@ -129,17 +141,18 @@ public interface ModelBuilder<T> extends LongRunningOperation {
      * @return The model.
      * @throws UnsupportedVersionException When the target Gradle version does not support building models.
      * @throws UnknownModelException When the target Gradle version or build does not support the requested model.
-     * @throws UnsupportedOperationConfigurationException
+     * @throws org.gradle.tooling.exceptions.UnsupportedOperationConfigurationException
      *          When the target Gradle version does not support some requested configuration option such as
      *          {@link #setStandardInput(java.io.InputStream)}, {@link #setJavaHome(java.io.File)},
      *          {@link #setJvmArguments(String...)}.
-     * @throws UnsupportedBuildArgumentException When there is a problem with build arguments provided by {@link #withArguments(String...)}.
+     * @throws org.gradle.tooling.exceptions.UnsupportedBuildArgumentException When there is a problem with build arguments provided by {@link #withArguments(String...)}.
      * @throws BuildException On some failure executing the Gradle build.
+     * @throws BuildCancelledException When the operation was cancelled before it completed successfully.
      * @throws GradleConnectionException On some other failure using the connection.
      * @throws IllegalStateException When the connection has been closed or is closing.
      * @since 1.0-milestone-3
      */
-    T get() throws GradleConnectionException, UnsupportedVersionException, UnknownModelException, UnsupportedOperationConfigurationException, BuildException, IllegalStateException, UnsupportedBuildArgumentException;
+    T get() throws GradleConnectionException, IllegalStateException;
 
     /**
      * Starts fetching the model, passing the result to the given handler when complete. This method returns immediately, and the result is later passed to the given

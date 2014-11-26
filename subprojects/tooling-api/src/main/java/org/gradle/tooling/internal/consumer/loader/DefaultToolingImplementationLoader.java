@@ -15,6 +15,7 @@
  */
 package org.gradle.tooling.internal.consumer.loader;
 
+import org.gradle.initialization.BuildCancellationToken;
 import org.gradle.internal.Factory;
 import org.gradle.internal.classloader.FilteringClassLoader;
 import org.gradle.internal.classloader.MultiParentClassLoader;
@@ -48,9 +49,9 @@ public class DefaultToolingImplementationLoader implements ToolingImplementation
         this.classLoader = classLoader;
     }
 
-    public ConsumerConnection create(Distribution distribution, ProgressLoggerFactory progressLoggerFactory, ConnectionParameters connectionParameters) {
+    public ConsumerConnection create(Distribution distribution, ProgressLoggerFactory progressLoggerFactory, ConnectionParameters connectionParameters, BuildCancellationToken cancellationToken) {
         LOGGER.debug("Using tooling provider from {}", distribution.getDisplayName());
-        ClassLoader classLoader = createImplementationClassLoader(distribution, progressLoggerFactory, connectionParameters.getGradleUserHomeDir());
+        ClassLoader classLoader = createImplementationClassLoader(distribution, progressLoggerFactory, connectionParameters.getGradleUserHomeDir(), cancellationToken);
         ServiceLocator serviceLocator = new ServiceLocator(classLoader);
         try {
             Factory<ConnectionVersion4> factory = serviceLocator.findFactory(ConnectionVersion4.class);
@@ -65,7 +66,11 @@ public class DefaultToolingImplementationLoader implements ToolingImplementation
 
             // Adopting the connection to a refactoring friendly type that the consumer owns
             AbstractConsumerConnection adaptedConnection;
-            if (connection instanceof ModelBuilder && connection instanceof InternalBuildActionExecutor) {
+            if (connection instanceof StoppableConnection) {
+                adaptedConnection = new ShutdownAwareConsumerConnection(connection, modelMapping, adapter);
+            } else if (connection instanceof InternalCancellableConnection) {
+                adaptedConnection = new CancellableConsumerConnection(connection, modelMapping, adapter);
+            } else if (connection instanceof ModelBuilder && connection instanceof InternalBuildActionExecutor) {
                 adaptedConnection = new ActionAwareConsumerConnection(connection, modelMapping, adapter);
             } else if (connection instanceof ModelBuilder) {
                 adaptedConnection = new ModelBuilderBackedConsumerConnection(connection, modelMapping, adapter);
@@ -74,9 +79,12 @@ public class DefaultToolingImplementationLoader implements ToolingImplementation
             } else if (connection instanceof InternalConnection) {
                 adaptedConnection = new InternalConnectionBackedConsumerConnection(connection, modelMapping, adapter);
             } else {
-                adaptedConnection = new ConnectionVersion4BackedConsumerConnection(connection, modelMapping, adapter);
+                return new ConnectionVersion4BackedConsumerConnection(distribution, connection, adapter);
             }
             adaptedConnection.configure(connectionParameters);
+            if (!adaptedConnection.getVersionDetails().supportsCancellation()) {
+                return new NonCancellableConsumerConnectionAdapter(adaptedConnection);
+            }
             return adaptedConnection;
         } catch (UnsupportedVersionException e) {
             throw e;
@@ -85,8 +93,8 @@ public class DefaultToolingImplementationLoader implements ToolingImplementation
         }
     }
 
-    private ClassLoader createImplementationClassLoader(Distribution distribution, ProgressLoggerFactory progressLoggerFactory, File userHomeDir) {
-        ClassPath implementationClasspath = distribution.getToolingImplementationClasspath(progressLoggerFactory, userHomeDir);
+    private ClassLoader createImplementationClassLoader(Distribution distribution, ProgressLoggerFactory progressLoggerFactory, File userHomeDir, BuildCancellationToken cancellationToken) {
+        ClassPath implementationClasspath = distribution.getToolingImplementationClasspath(progressLoggerFactory, userHomeDir, cancellationToken);
         LOGGER.debug("Using tooling provider classpath: {}", implementationClasspath);
         // On IBM JVM 5, ClassLoader.getResources() uses a combination of findResources() and getParent() and traverses the hierarchy rather than just calling getResources()
         // Wrap our real classloader in one that hides the parent.
@@ -94,15 +102,6 @@ public class DefaultToolingImplementationLoader implements ToolingImplementation
         MultiParentClassLoader parentObfuscatingClassLoader = new MultiParentClassLoader(classLoader);
         FilteringClassLoader filteringClassLoader = new FilteringClassLoader(parentObfuscatingClassLoader);
         filteringClassLoader.allowPackage("org.gradle.tooling.internal.protocol");
-        return new MutableURLClassLoader(filteringClassLoader, implementationClasspath.getAsURLArray()) {
-            @Override
-            public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-                //TODO:ADAM - remove this.
-                if (name.startsWith("com.sun.jdi.")) {
-                    System.out.println(String.format("=> Loading JDI class %s in provider ClassLoader. Should not be.", name));
-                }
-                return super.loadClass(name, resolve);
-            }
-        };
+        return new MutableURLClassLoader(filteringClassLoader, implementationClasspath.getAsURLArray());
     }
 }

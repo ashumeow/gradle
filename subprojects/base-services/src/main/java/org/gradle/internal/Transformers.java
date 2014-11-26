@@ -86,6 +86,7 @@ public abstract class Transformers {
 
     /**
      * Returns a transformer that names objects with the given {@link Namer}
+     *
      * @param namer The namer to name the objects with
      * @param <T> The type of objects to be named
      * @return The naming transformer.
@@ -122,9 +123,14 @@ public abstract class Transformers {
         };
     }
 
-    /**
-     * Converts an {@link Action} to a {@link Transformer} that runs the action against the input value and returns {@code null}.
-     */
+    public static <R> Transformer<R, Object> toTransformer(final Factory<R> factory) {
+        return new Transformer<R, Object>() {
+            public R transform(Object original) {
+                return factory.create();
+            }
+        };
+    }
+
     public static <R, I> Transformer<R, I> toTransformer(final Action<? super I> action) {
         return new Transformer<R, I>() {
             public R transform(I original) {
@@ -145,6 +151,17 @@ public abstract class Transformers {
                 } catch (MalformedURLException e) {
                     throw UncheckedException.throwAsUncheckedException(e);
                 }
+            }
+        };
+    }
+
+    /**
+     * Always returns the given argument.
+     */
+    public static <T, I> Transformer<T, I> constant(final T t) {
+        return new Transformer<T, I>() {
+            public T transform(I original) {
+                return t;
             }
         };
     }

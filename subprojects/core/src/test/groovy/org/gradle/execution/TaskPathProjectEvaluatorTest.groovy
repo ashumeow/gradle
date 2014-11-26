@@ -16,49 +16,48 @@
 
 package org.gradle.execution
 
+import org.gradle.api.BuildCancelledException
 import org.gradle.api.internal.project.ProjectInternal
-import org.gradle.execution.taskpath.ResolvedTaskPath
-import org.gradle.execution.taskpath.TaskPathResolver
+import org.gradle.initialization.BuildCancellationToken
 import spock.lang.Specification
 
 class TaskPathProjectEvaluatorTest extends Specification {
-
-    private resolver = Mock(TaskPathResolver)
+    private cancellationToken = Mock(BuildCancellationToken)
     private project = Mock(ProjectInternal)
+    private evaluator = new TaskPathProjectEvaluator(cancellationToken)
 
-    private evaluator = new TaskPathProjectEvaluator(resolver)
-
-    def "evaluates project by task path"() {
-        def path = Mock(ResolvedTaskPath)
-        def fooProject = Mock(ProjectInternal)
+    def "project configuration fails when cancelled"() {
+        given:
+        cancellationToken.cancellationRequested >> true
 
         when:
-        evaluator.evaluateByPath(project, ":foo:bar")
+        evaluator.configure(project)
 
         then:
-        1 * resolver.resolvePath(":foo:bar", project) >> path
-        1 * path.isQualified() >> true
-        1 * path.getProject() >> fooProject
-        1 * fooProject.evaluate()
-        0 * _._
+        BuildCancelledException e = thrown()
+
+        and:
+        0 * project._
     }
 
-    def "evaluates all projects"() {
-        def path = Mock(ResolvedTaskPath)
-        def subprojects = [Mock(ProjectInternal), Mock(ProjectInternal)]
+    def "project hierarchy configuration fails when cancelled"() {
+        def child1 = Mock(ProjectInternal)
+        def child2 = Mock(ProjectInternal)
+        def subprojects = [child1, child2]
+
+        given:
+        project.subprojects >> subprojects
+        cancellationToken.cancellationRequested >>> [false, false, true]
 
         when:
-        evaluator.evaluateByPath(project, "someTask")
+        evaluator.configureHierarchy(project)
 
         then:
-        1 * resolver.resolvePath("someTask", project) >> path
-        1 * path.isQualified() >> false
+        BuildCancelledException e = thrown()
 
         and:
         1 * project.evaluate()
-        1 * project.subprojects >> subprojects
-        1 * subprojects[0].evaluate()
-        1 * subprojects[1].evaluate()
-        0 * _._
+        1 * child1.evaluate()
+        0 * child2._
     }
 }

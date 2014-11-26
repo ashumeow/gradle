@@ -26,34 +26,34 @@ import java.io.File;
 import java.net.URLClassLoader;
 
 public class DefaultClassLoaderRegistry implements ClassLoaderRegistry, JdkToolsInitializer {
-    private final FilteringClassLoader rootClassLoader;
-    private final ClassLoader coreImplClassLoader;
-    private final ClassLoader pluginsClassLoader;
+    private final ClassLoader apiOnlyClassLoader;
+    private final ClassLoader apiAndPluginsClassLoader;
+    private final ClassLoader extensionsClassLoader;
 
     public DefaultClassLoaderRegistry(ClassPathRegistry classPathRegistry, ClassLoaderFactory classLoaderFactory) {
         ClassLoader runtimeClassLoader = getClass().getClassLoader();
 
-        // Core impl
-        ClassPath coreImplClassPath = classPathRegistry.getClassPath("GRADLE_CORE_IMPL");
-        coreImplClassLoader = new MutableURLClassLoader(runtimeClassLoader, coreImplClassPath);
+        apiOnlyClassLoader = restrictToGradleApi(classLoaderFactory, runtimeClassLoader);
 
-        // Add in libs for plugins
-        ClassPath pluginsClassPath = classPathRegistry.getClassPath("GRADLE_PLUGINS");
-        ClassLoader pluginsImports = new CachingClassLoader(new MultiParentClassLoader(runtimeClassLoader, coreImplClassLoader));
-        pluginsClassLoader = new MutableURLClassLoader(pluginsImports, pluginsClassPath);
+        ClassPath pluginsClassPath = classPathRegistry.getClassPath("GRADLE_EXTENSIONS");
+        extensionsClassLoader = new MutableURLClassLoader(runtimeClassLoader, pluginsClassPath);
 
-        rootClassLoader = classLoaderFactory.createFilteringClassLoader(pluginsClassLoader);
+        this.apiAndPluginsClassLoader = restrictToGradleApi(classLoaderFactory, extensionsClassLoader);
+    }
+
+    private ClassLoader restrictToGradleApi(ClassLoaderFactory classLoaderFactory, ClassLoader classLoader) {
+        FilteringClassLoader rootClassLoader = classLoaderFactory.createFilteringClassLoader(classLoader);
         rootClassLoader.allowPackage("org.gradle");
         rootClassLoader.allowResources("META-INF/gradle-plugins");
         rootClassLoader.allowPackage("org.apache.tools.ant");
         rootClassLoader.allowPackage("groovy");
         rootClassLoader.allowPackage("org.codehaus.groovy");
         rootClassLoader.allowPackage("groovyjarjarantlr");
-        rootClassLoader.allowPackage("org.apache.ivy");
         rootClassLoader.allowPackage("org.slf4j");
         rootClassLoader.allowPackage("org.apache.commons.logging");
         rootClassLoader.allowPackage("org.apache.log4j");
         rootClassLoader.allowPackage("javax.inject");
+        return new CachingClassLoader(rootClassLoader);
     }
 
     public void initializeJdkTools() {
@@ -70,14 +70,14 @@ public class DefaultClassLoaderRegistry implements ClassLoaderRegistry, JdkTools
     }
 
     public ClassLoader getGradleApiClassLoader() {
-        return rootClassLoader;
-    }
-
-    public ClassLoader getCoreImplClassLoader() {
-        return coreImplClassLoader;
+        return apiAndPluginsClassLoader;
     }
 
     public ClassLoader getPluginsClassLoader() {
-        return pluginsClassLoader;
+        return extensionsClassLoader;
+    }
+
+    public ClassLoader getGradleCoreApiClassLoader() {
+        return apiOnlyClassLoader;
     }
 }

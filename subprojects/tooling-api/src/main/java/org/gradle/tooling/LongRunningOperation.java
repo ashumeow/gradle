@@ -16,6 +16,8 @@
 
 package org.gradle.tooling;
 
+import org.gradle.api.Incubating;
+
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -56,6 +58,16 @@ public interface LongRunningOperation {
      * @since 1.0-milestone-7
      */
     LongRunningOperation setStandardError(OutputStream outputStream);
+
+    /**
+     * Specifies whether to generate colored (ANSI encoded) output for logging. The default is to not generate color output.
+     *
+     * @param colorOutput {@code true} to request color output (using ANSI encoding).
+     * @return this
+     * @since 2.3
+     */
+    @Incubating
+    LongRunningOperation setColorOutput(boolean colorOutput);
 
     /**
      * Sets the {@link java.io.InputStream} that will be used as standard input for this operation.
@@ -145,4 +157,11 @@ public interface LongRunningOperation {
      */
     LongRunningOperation addProgressListener(ProgressListener listener);
 
+    /**
+     * Sets the cancellation token to use to cancel the operation if required.
+     *
+     * @since 2.1
+     */
+    @Incubating
+    LongRunningOperation withCancellationToken(CancellationToken cancellationToken);
 }

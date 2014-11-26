@@ -25,15 +25,37 @@ import org.gradle.logging.StyledTextOutput;
 import org.gradle.logging.StyledTextOutputFactory;
 import org.gradle.util.GradleVersion;
 
+import javax.inject.Inject;
+
 import static org.gradle.logging.StyledTextOutput.Style.UserInput;
 
 public class Help extends DefaultTask {
     private String taskPath;
 
+    @Inject
+    protected StyledTextOutputFactory getTextOutputFactory() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Inject
+    protected BuildClientMetaData getClientMetaData() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Inject
+    protected TaskSelector getTaskSelector() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Inject
+    protected OptionReader getOptionReader() {
+        throw new UnsupportedOperationException();
+    }
+
     @TaskAction
     void displayHelp() {
-        StyledTextOutput output = getServices().get(StyledTextOutputFactory.class).create(Help.class);
-        BuildClientMetaData metaData = getServices().get(BuildClientMetaData.class);
+        StyledTextOutput output = getTextOutputFactory().create(Help.class);
+        BuildClientMetaData metaData = getClientMetaData();
         if (taskPath != null) {
             printTaskHelp(output);
         } else {
@@ -42,9 +64,9 @@ public class Help extends DefaultTask {
     }
 
     private void printTaskHelp(StyledTextOutput output) {
-        TaskSelector selector = getServices().get(TaskSelector.class);
-        final TaskSelector.TaskSelection selection = selector.getSelection(taskPath);
-        final OptionReader optionReader = getServices().get(OptionReader.class);
+        TaskSelector selector = getTaskSelector();
+        TaskSelector.TaskSelection selection = selector.getSelection(taskPath);
+        OptionReader optionReader = getOptionReader();
         TaskDetailPrinter taskDetailPrinter = new TaskDetailPrinter(taskPath, selection, optionReader);
         taskDetailPrinter.print(output);
     }
@@ -64,9 +86,13 @@ public class Help extends DefaultTask {
         output.text("To see a list of command-line options, run ");
         metaData.describeCommand(output.withStyle(UserInput), "--help");
         output.println();
+        output.println();
+        output.text("To see more detail about a task, run ");
+        metaData.describeCommand(output.withStyle(UserInput), "help --task <task>");
+        output.println();
     }
 
-    @Option(option = "task", description = "The task, detailed help is requested for.")
+    @Option(option = "task", description = "The task to show help for.")
     public void setTaskPath(String taskPath) {
         this.taskPath = taskPath;
     }

@@ -23,13 +23,14 @@ import org.gradle.api.internal.GradleInternal;
 import org.gradle.api.internal.file.FileResolver;
 import org.gradle.api.internal.file.TemporaryFileProvider;
 import org.gradle.api.internal.file.TmpDirTemporaryFileProvider;
+import org.gradle.api.internal.initialization.ClassLoaderScope;
 import org.gradle.api.internal.project.DefaultProject;
 import org.gradle.api.internal.project.IProjectFactory;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.groovy.scripts.StringScriptSource;
 import org.gradle.initialization.DefaultProjectDescriptor;
 import org.gradle.initialization.DefaultProjectDescriptorRegistry;
-import org.gradle.internal.nativeplatform.services.NativeServices;
+import org.gradle.internal.nativeintegration.services.NativeServices;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.internal.service.ServiceRegistryBuilder;
 import org.gradle.internal.service.scopes.ServiceRegistryFactory;
@@ -58,7 +59,8 @@ public class ProjectBuilderImpl {
                 new StringScriptSource("test build file", null),
                 parentProject.getGradle(),
                 parentProject.getGradle().getServiceRegistryFactory(),
-                parentProject.getClassLoaderScope().createChild()
+                parentProject.getClassLoaderScope().createChild(),
+                parentProject.getBaseClassLoaderScope()
         );
         parentProject.addChildProject(project);
         parentProject.getProjectRegistry().addProject(project);
@@ -78,7 +80,9 @@ public class ProjectBuilderImpl {
 
         DefaultProjectDescriptor projectDescriptor = new DefaultProjectDescriptor(null, name, projectDir, new DefaultProjectDescriptorRegistry(),
                 topLevelRegistry.get(FileResolver.class));
-        ProjectInternal project = topLevelRegistry.get(IProjectFactory.class).createProject(projectDescriptor, null, gradle, gradle.getClassLoaderScope().createSibling());
+        ClassLoaderScope baseScope = gradle.getClassLoaderScope();
+        ClassLoaderScope rootProjectScope = baseScope.createChild();
+        ProjectInternal project = topLevelRegistry.get(IProjectFactory.class).createProject(projectDescriptor, null, gradle, rootProjectScope, baseScope);
 
         gradle.setRootProject(project);
         gradle.setDefaultProject(project);

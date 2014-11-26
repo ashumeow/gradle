@@ -15,12 +15,15 @@
  */
 package org.gradle.api;
 
+import org.gradle.internal.HasInternalProtocol;
+
 /**
  * A {@link NamedDomainObjectContainer} that allows to create domain objects with different types.
  *
  * @param <T> the (base) type of domain objects in the container
  */
 @Incubating
+@HasInternalProtocol
 public interface PolymorphicDomainObjectContainer<T> extends NamedDomainObjectContainer<T> {
     /**
      * Creates a domain object with the specified name and type, and adds it to the container.
@@ -71,4 +74,13 @@ public interface PolymorphicDomainObjectContainer<T> extends NamedDomainObjectCo
      * or the container does not support creating a domain object with the specified type
      */
     <U extends T> U create(String name, Class<U> type, Action<? super U> configuration) throws InvalidUserDataException;
+
+    /**
+     * Creates a regular container that wraps the polymorphic container presenting all elements of a specified type.
+     *
+     * @param type the type of the container elements
+     * @param <U> the type of the container elements
+     * @return a {@link NamedDomainObjectContainer} providing access to elements of type U.
+     */
+    <U extends T> NamedDomainObjectContainer<U> containerWithType(Class<U> type);
 }

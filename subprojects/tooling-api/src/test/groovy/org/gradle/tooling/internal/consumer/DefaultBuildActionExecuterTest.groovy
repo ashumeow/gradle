@@ -47,7 +47,9 @@ class DefaultBuildActionExecuterTest extends ConcurrentSpec {
             action.run(connection)
             adaptedHandler = args[1]
         }
-        1 * connection.run(action, _) >> result
+        1 * connection.run(action, _) >> { args ->
+            return result
+        }
 
         when:
         adaptedHandler.onComplete(result)

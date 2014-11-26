@@ -17,13 +17,12 @@
 package org.gradle.api.internal.file.copy;
 
 import groovy.lang.Closure;
-import org.gradle.api.GradleException;
 import org.gradle.api.file.ContentFilterable;
 import org.gradle.api.file.DuplicatesStrategy;
 import org.gradle.api.file.FileVisitDetails;
 import org.gradle.api.file.RelativePath;
 import org.gradle.api.internal.file.AbstractFileTreeElement;
-import org.gradle.internal.nativeplatform.filesystem.Chmod;
+import org.gradle.internal.nativeintegration.filesystem.Chmod;
 
 import java.io.*;
 import java.util.Map;
@@ -109,14 +108,8 @@ public class DefaultFileCopyDetails extends AbstractFileTreeElement implements F
     }
 
     private void adaptPermissions(File target) {
-        final Integer specMode = getMode();
-        if(specMode !=null){
-            try {
-                getChmod().chmod(target, specMode);
-            } catch (IOException e) {
-                throw new GradleException(String.format("Could not set permission %s on '%s'.", specMode, target), e);
-            }
-        }
+        int specMode = getMode();
+        getChmod().chmod(target, specMode);
     }
 
     public RelativePath getRelativePath() {
@@ -194,6 +187,18 @@ public class DefaultFileCopyDetails extends AbstractFileTreeElement implements F
 
     public DuplicatesStrategy getDuplicatesStrategy() {
         return this.duplicatesStrategy;
+    }
+
+    public String getSourceName() {
+        return this.fileDetails.getName();
+    }
+
+    public String getSourcePath() {
+        return this.fileDetails.getPath();
+    }
+
+    public RelativePath getRelativeSourcePath() {
+        return this.fileDetails.getRelativePath();
     }
 
     private static class ByteCountingOutputStream extends OutputStream {

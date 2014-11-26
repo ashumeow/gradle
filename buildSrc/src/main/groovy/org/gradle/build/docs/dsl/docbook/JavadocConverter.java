@@ -330,6 +330,7 @@ public class JavadocConverter {
             elementToElementMap.put("ol", "orderedlist");
             elementToElementMap.put("li", "listitem");
             elementToElementMap.put("em", "emphasis");
+            elementToElementMap.put("strong", "emphasis");
             elementToElementMap.put("i", "emphasis");
             elementToElementMap.put("b", "emphasis");
             elementToElementMap.put("code", "literal");
@@ -612,7 +613,7 @@ public class JavadocConverter {
             }
             if (elementName.equals("dd")) {
                 if (currentItem == null) {
-                    throw new IllegalStateException("No <dt> element preceeding <dd> element.");
+                    throw new IllegalStateException("No <dt> element preceding <dd> element.");
                 }
                 nodes.push(document.createElement("listitem"));
                 return true;

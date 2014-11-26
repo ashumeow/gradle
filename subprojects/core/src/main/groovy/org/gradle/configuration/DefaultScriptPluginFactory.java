@@ -16,74 +16,82 @@
 
 package org.gradle.configuration;
 
-import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.initialization.dsl.ScriptHandler;
+import org.gradle.api.internal.DocumentationRegistry;
 import org.gradle.api.internal.file.FileLookup;
 import org.gradle.api.internal.initialization.ClassLoaderScope;
 import org.gradle.api.internal.initialization.ScriptHandlerFactory;
+import org.gradle.api.internal.project.ProjectScript;
 import org.gradle.api.plugins.PluginAware;
 import org.gradle.groovy.scripts.*;
 import org.gradle.groovy.scripts.internal.BuildScriptTransformer;
 import org.gradle.groovy.scripts.internal.PluginsAndBuildscriptTransformer;
 import org.gradle.groovy.scripts.internal.StatementExtractingScriptTransformer;
 import org.gradle.internal.Factory;
-import org.gradle.internal.classpath.ClassPath;
-import org.gradle.internal.classpath.DefaultClassPath;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.service.DefaultServiceRegistry;
 import org.gradle.logging.LoggingManagerInternal;
-import org.gradle.plugin.PluginHandler;
-import org.gradle.plugin.internal.*;
-import org.gradle.plugin.resolve.internal.PluginRequest;
-import org.gradle.plugin.resolve.internal.PluginResolver;
+import org.gradle.model.dsl.internal.transform.ClosureCreationInterceptingVerifier;
+import org.gradle.model.internal.inspect.ModelRuleSourceDetector;
+import org.gradle.plugin.use.internal.PluginDependenciesService;
+import org.gradle.plugin.use.internal.PluginRequest;
+import org.gradle.plugin.use.internal.PluginRequestApplicator;
 
-import java.io.File;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
 
 public class DefaultScriptPluginFactory implements ScriptPluginFactory {
+
     private final ScriptCompilerFactory scriptCompilerFactory;
     private final ImportsReader importsReader;
     private final Factory<LoggingManagerInternal> loggingManagerFactory;
     private final Instantiator instantiator;
     private final ScriptHandlerFactory scriptHandlerFactory;
-    private final PluginResolverFactory pluginResolverFactory;
+    private final PluginRequestApplicator pluginRequestApplicator;
     private final FileLookup fileLookup;
+    private final DocumentationRegistry documentationRegistry;
+    private final ModelRuleSourceDetector modelRuleSourceDetector;
 
     public DefaultScriptPluginFactory(ScriptCompilerFactory scriptCompilerFactory,
                                       ImportsReader importsReader,
                                       Factory<LoggingManagerInternal> loggingManagerFactory,
                                       Instantiator instantiator,
                                       ScriptHandlerFactory scriptHandlerFactory,
-                                      PluginResolverFactory pluginResolverFactory,
-                                      FileLookup fileLookup) {
+                                      PluginRequestApplicator pluginRequestApplicator,
+                                      FileLookup fileLookup,
+                                      DocumentationRegistry documentationRegistry,
+                                      ModelRuleSourceDetector modelRuleSourceDetector) {
         this.scriptCompilerFactory = scriptCompilerFactory;
         this.importsReader = importsReader;
         this.loggingManagerFactory = loggingManagerFactory;
         this.instantiator = instantiator;
         this.scriptHandlerFactory = scriptHandlerFactory;
-        this.pluginResolverFactory = pluginResolverFactory;
+        this.pluginRequestApplicator = pluginRequestApplicator;
         this.fileLookup = fileLookup;
+        this.documentationRegistry = documentationRegistry;
+        this.modelRuleSourceDetector = modelRuleSourceDetector;
     }
 
-    public ScriptPlugin create(ScriptSource scriptSource, ScriptHandler scriptHandler, ClassLoaderScope classLoaderScope, String classpathClosureName, Class<? extends BasicScript> scriptClass) {
-        return new ScriptPluginImpl(scriptSource, scriptHandler, classLoaderScope, classpathClosureName, scriptClass);
+    public ScriptPlugin create(ScriptSource scriptSource, ScriptHandler scriptHandler, ClassLoaderScope targetScope, ClassLoaderScope baseScope, String classpathClosureName, Class<? extends BasicScript> scriptClass, boolean ownerScript) {
+        return new ScriptPluginImpl(scriptSource, scriptHandler, targetScope, baseScope, classpathClosureName, scriptClass, ownerScript);
     }
 
     private class ScriptPluginImpl implements ScriptPlugin {
         private final ScriptSource scriptSource;
-        private final ClassLoaderScope classLoaderScope;
+        private final ClassLoaderScope targetScope;
+        private final ClassLoaderScope baseScope;
         private final String classpathClosureName;
         private final Class<? extends BasicScript> scriptType;
         private final ScriptHandler scriptHandler;
+        private final boolean ownerScript;
 
-        public ScriptPluginImpl(ScriptSource scriptSource, ScriptHandler scriptHandler, ClassLoaderScope classLoaderScope, String classpathClosureName, Class<? extends BasicScript> scriptType) {
+        public ScriptPluginImpl(ScriptSource scriptSource, ScriptHandler scriptHandler, ClassLoaderScope targetScope, ClassLoaderScope baseScope, String classpathClosureName, Class<? extends BasicScript> scriptType, boolean ownerScript) {
             this.scriptSource = scriptSource;
-            this.classLoaderScope = classLoaderScope;
+            this.targetScope = targetScope;
+            this.baseScope = baseScope;
             this.classpathClosureName = classpathClosureName;
             this.scriptHandler = scriptHandler;
             this.scriptType = scriptType;
+            this.ownerScript = ownerScript;
         }
 
 
@@ -95,25 +103,25 @@ public class DefaultScriptPluginFactory implements ScriptPluginFactory {
             DefaultServiceRegistry services = new DefaultServiceRegistry();
             services.add(ScriptPluginFactory.class, DefaultScriptPluginFactory.this);
             services.add(ScriptHandlerFactory.class, scriptHandlerFactory);
-            services.add(ClassLoaderScope.class, classLoaderScope.getBase());
+            services.add(ClassLoaderScope.class, targetScope);
             services.add(LoggingManagerInternal.class, loggingManagerFactory.create());
             services.add(Instantiator.class, instantiator);
             services.add(ScriptHandler.class, scriptHandler);
             services.add(FileLookup.class, fileLookup);
+            services.add(ModelRuleSourceDetector.class, modelRuleSourceDetector);
 
             ScriptSource withImports = importsReader.withImports(scriptSource);
 
-            List<PluginRequest> pluginRequests = new LinkedList<PluginRequest>();
-            if (target instanceof PluginAware) {
-                services.add(PluginHandler.class, new DefaultPluginHandler(pluginRequests));
-            } else {
-                services.add(PluginHandler.class, new NonPluggableTargetPluginHandler(target));
-            }
+            PluginDependenciesService pluginDependenciesService = new PluginDependenciesService(getSource());
+            services.add(PluginDependenciesService.class, pluginDependenciesService);
 
             ScriptCompiler compiler = scriptCompilerFactory.createCompiler(withImports);
-            compiler.setClassloader(classLoaderScope.getBase().getChildClassLoader());
+            compiler.setClassloader(baseScope.getExportClassLoader());
 
-            PluginsAndBuildscriptTransformer scriptBlockTransformer = new PluginsAndBuildscriptTransformer(classpathClosureName);
+            boolean supportsPluginsBlock = ProjectScript.class.isAssignableFrom(scriptType);
+            String onPluginBlockError = supportsPluginsBlock ? null : "Only Project build scripts can contain plugins {} blocks";
+
+            PluginsAndBuildscriptTransformer scriptBlockTransformer = new PluginsAndBuildscriptTransformer(classpathClosureName, onPluginBlockError, documentationRegistry);
 
             StatementExtractingScriptTransformer classpathScriptTransformer = new StatementExtractingScriptTransformer(classpathClosureName, scriptBlockTransformer);
 
@@ -123,30 +131,23 @@ public class DefaultScriptPluginFactory implements ScriptPluginFactory {
             classPathScriptRunner.getScript().init(target, services);
             classPathScriptRunner.run();
 
-            Configuration classpathConfiguration = scriptHandler.getConfigurations().getByName(ScriptHandler.CLASSPATH_CONFIGURATION);
-            Set<File> files = classpathConfiguration.getFiles();
-            ClassPath classPath = new DefaultClassPath(files);
+            List<PluginRequest> pluginRequests = pluginDependenciesService.getRequests();
+            PluginAware pluginAware = target instanceof PluginAware ? (PluginAware) target : null;
+            pluginRequestApplicator.applyPlugins(pluginRequests, scriptHandler, pluginAware, targetScope);
 
-            ClassLoader exportedClassLoader = classLoaderScope.export(classPath);
+            compiler.setClassloader(targetScope.getLocalClassLoader());
 
-            if (!pluginRequests.isEmpty()) {
-                PluginResolver pluginResolver = pluginResolverFactory.createPluginResolver(exportedClassLoader);
-                @SuppressWarnings("ConstantConditions")
-                PluginResolutionApplicator resolutionApplicator = new PluginResolutionApplicator((PluginAware) target, classLoaderScope);
-                PluginRequestApplicator requestApplicator = new PluginRequestApplicator(pluginResolver, resolutionApplicator);
-                requestApplicator.applyPlugin(pluginRequests);
-            }
+            BuildScriptTransformer transformer = new BuildScriptTransformer("no_" + classpathScriptTransformer.getId(), classpathScriptTransformer.invert(), scriptSource);
+            compiler.setTransformer(transformer);
 
-            classLoaderScope.lock();
+            // TODO - find a less tangled way of getting this in here, see the verifier impl for why it's needed
+            compiler.setVerifier(new ClosureCreationInterceptingVerifier());
 
-            compiler.setClassloader(classLoaderScope.getScopeClassLoader());
-
-            compiler.setTransformer(new BuildScriptTransformer("no_" + classpathScriptTransformer.getId(), classpathScriptTransformer.invert()));
             ScriptRunner<? extends BasicScript> runner = compiler.compile(scriptType);
 
             BasicScript script = runner.getScript();
             script.init(target, services);
-            if (target instanceof ScriptAware) {
+            if (ownerScript && target instanceof ScriptAware) {
                 ((ScriptAware) target).setScript(script);
             }
             runner.run();

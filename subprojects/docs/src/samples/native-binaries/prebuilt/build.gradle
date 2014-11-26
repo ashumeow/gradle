@@ -33,13 +33,14 @@ model {
             }
         }
     }
-}
-executables {
-    main {}
-}
-sources.main.cpp.lib library: 'boost', linkage: 'api'
-sources.main.cpp.lib library: 'util', linkage: 'static'
-task buildExecutables {
-    dependsOn binaries.withType(ExecutableBinary)
+
+    components {
+        main(NativeExecutableSpec) {
+            sources {
+                cpp.lib library: 'boost', linkage: 'api'
+                cpp.lib library: 'util', linkage: 'static'
+            }
+        }
+    }
 }
 

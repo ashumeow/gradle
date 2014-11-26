@@ -17,7 +17,6 @@
 package org.gradle.util;
 
 import net.jcip.annotations.ThreadSafe;
-import org.apache.commons.lang.StringUtils;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
 import org.gradle.internal.Factory;
@@ -34,7 +33,6 @@ import java.util.concurrent.locks.ReentrantLock;
 @ThreadSafe
 public class SingleMessageLogger {
     private static final Logger LOGGER = Logging.getLogger(DeprecationLogger.class);
-    private static final Set<String> DYNAMIC_PROPERTIES = Collections.synchronizedSet(new HashSet<String>());
     private static final Set<String> FEATURES = Collections.synchronizedSet(new HashSet<String>());
 
     private static final ThreadLocal<Boolean> ENABLED = new ThreadLocal<Boolean>() {
@@ -69,7 +67,6 @@ public class SingleMessageLogger {
     }
 
     public static void reset() {
-        DYNAMIC_PROPERTIES.clear();
         FEATURES.clear();
         LOCK.lock();
         try {
@@ -92,6 +89,12 @@ public class SingleMessageLogger {
         nagUserWith(String.format(
                 "The %s plugin %s. Please use the %s plugin instead.",
                 pluginName, getDeprecationMessage(), replacement));
+    }
+
+    public static void nagUserOfReplacedTask(String taskName, String replacement) {
+        nagUserWith(String.format(
+                "The %s task %s. Please use the %s task instead.",
+                taskName, getDeprecationMessage(), replacement));
     }
 
     public static void nagUserOfReplacedTaskType(String taskName, String replacement) {
@@ -120,11 +123,6 @@ public class SingleMessageLogger {
     public static void nagUserOfDiscontinuedProperty(String propertyName, String advice) {
         nagUserWith(String.format("The %s property %s. %s",
                 propertyName, getDeprecationMessage(), advice));
-    }
-
-    public static void nagUserOfDiscontinuedConfiguration(String configurationName, String advice) {
-        nagUserWith(String.format("The %s configuration %s. %s",
-                configurationName, getDeprecationMessage(), advice));
     }
 
     public static void nagUserOfReplacedNamedParameter(String parameterName, String replacement) {
@@ -182,22 +180,6 @@ public class SingleMessageLogger {
 
     private static boolean isEnabled() {
         return ENABLED.get();
-    }
-
-    public static void nagUserAboutDynamicProperty(String propertyName, Object target, Object value) {
-        if (!isEnabled()) {
-            return;
-        }
-        nagUserOfDeprecated("Creating properties on demand (a.k.a. dynamic properties)", "Please read http://gradle.org/docs/current/dsl/org.gradle.api.plugins.ExtraPropertiesExtension.html for information on the replacement for dynamic properties");
-
-        String propertyWithClass = target.getClass().getName() + "." + propertyName;
-        if (DYNAMIC_PROPERTIES.add(propertyWithClass)) {
-            String propertyWithTarget = String.format("\"%s\" on \"%s\"", propertyName, target);
-            String theValue = (value==null)? "null" : StringUtils.abbreviate(value.toString(), 25);
-            nagUserWith(String.format("Deprecated dynamic property: %s, value: \"%s\".", propertyWithTarget, theValue));
-        } else {
-            nagUserWith(String.format("Deprecated dynamic property \"%s\" created in multiple locations.", propertyName));
-        }
     }
 
     public static void incubatingFeatureUsed(String incubatingFeature) {

@@ -37,7 +37,7 @@ public interface FileCopyDetails extends FileTreeElement, ContentFilterable {
     /**
      * Sets the destination name of this file.
      *
-     * @param name The name of this file.
+     * @param name The destination name of this file.
      */
     void setName(String name);
 
@@ -80,20 +80,51 @@ public interface FileCopyDetails extends FileTreeElement, ContentFilterable {
     DuplicatesStrategy getDuplicatesStrategy();
 
     /**
+     * Returns the base name of this file at the copy destination.
+     *
+     * @return The destination name. Never returns null.
+     */
+    String getName();
+
+    /**
      * Returns the path of this file, relative to the root of the copy destination.
      * <p>
      * Always uses '/' as the hierarchy separator, regardless of platform file separator.
      * Same as calling <code>getRelativePath().getPathString()</code>.
      *
-     * @return The path. Never returns null.
+     * @return The path, relative to the root of the copy destination. Never returns null.
      */
     String getPath();
 
     /**
      * Returns the path of this file, relative to the root of the copy destination.
      *
-     * @return The path. Never returns null.
+     * @return The path, relative to the root of the copy destination. Never returns null.
      */
     RelativePath getRelativePath();
+
+    /**
+     * Returns the base name of this file at the copy source.
+     *
+     * @return The source name. Never returns null.
+     */
+    String getSourceName();
+
+    /**
+     * Returns the path of this file, relative to the root of the containing file tree.
+     * <p>
+     * Always uses '/' as the hierarchy separator, regardless of platform file separator.
+     * Same as calling <code>getRelativeSourcePath().getPathString()</code>.
+     *
+     * @return The path, relative to the root of the containing file tree. Never returns null.
+     */
+    String getSourcePath();
+
+    /**
+     * Returns the path of this file, relative to the root of the containing file tree.
+     *
+     * @return The path, relative to the root of the containing file tree. Never returns null.
+     */
+    RelativePath getRelativeSourcePath();
 
 }

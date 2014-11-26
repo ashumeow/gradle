@@ -25,6 +25,7 @@ import org.gradle.api.file.ConfigurableFileTree;
 import org.gradle.api.file.CopySpec;
 import org.gradle.api.file.FileTree;
 import org.gradle.api.initialization.dsl.ScriptHandler;
+import org.gradle.api.internal.ClosureBackedAction;
 import org.gradle.api.internal.ProcessOperations;
 import org.gradle.api.internal.file.DefaultFileOperations;
 import org.gradle.api.internal.file.FileLookup;
@@ -42,8 +43,9 @@ import org.gradle.configuration.ScriptPluginFactory;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.process.ExecResult;
+import org.gradle.process.ExecSpec;
+import org.gradle.process.JavaExecSpec;
 import org.gradle.util.ConfigureUtil;
-import org.gradle.util.DeprecationLogger;
 
 import java.io.File;
 import java.net.URI;
@@ -81,9 +83,13 @@ public abstract class DefaultScript extends BasicScript {
     }
 
     private DefaultObjectConfigurationAction createObjectConfigurationAction() {
-        ClassLoaderScope classLoaderScope = __scriptServices.get(ClassLoaderScope.class).createChild();
+        ClassLoaderScope classLoaderScope = __scriptServices.get(ClassLoaderScope.class);
         return new DefaultObjectConfigurationAction(
-                getFileResolver(), __scriptServices.get(ScriptPluginFactory.class), __scriptServices.get(ScriptHandlerFactory.class), classLoaderScope, getScriptTarget()
+                getFileResolver(),
+                __scriptServices.get(ScriptPluginFactory.class),
+                __scriptServices.get(ScriptHandlerFactory.class),
+                classLoaderScope,
+                getScriptTarget()
         );
     }
 
@@ -124,7 +130,7 @@ public abstract class DefaultScript extends BasicScript {
     }
 
     public ConfigurableFileCollection files(Object paths, Closure configureClosure) {
-        return fileOperations.files(paths, configureClosure);
+        return ConfigureUtil.configure(configureClosure, fileOperations.files(paths));
     }
 
     public String relativePath(Object path) {
@@ -139,14 +145,8 @@ public abstract class DefaultScript extends BasicScript {
         return fileOperations.fileTree(args);
     }
 
-    public ConfigurableFileTree fileTree(Closure closure) {
-        DeprecationLogger.nagUserOfDeprecated("fileTree(Closure)", "Use fileTree((Object){ baseDir }) to have the closure used as the file tree base directory");
-        //noinspection deprecation
-        return fileOperations.fileTree(closure);
-    }
-
     public ConfigurableFileTree fileTree(Object baseDir, Closure configureClosure) {
-        return fileOperations.fileTree(baseDir, configureClosure);
+        return ConfigureUtil.configure(configureClosure, fileOperations.fileTree(baseDir));
     }
 
     public FileTree zipTree(Object zipPath) {
@@ -162,7 +162,11 @@ public abstract class DefaultScript extends BasicScript {
     }
 
     public WorkResult copy(Closure closure) {
-        return fileOperations.copy(closure);
+        return copy(new ClosureBackedAction<CopySpec>(closure));
+    }
+
+    public WorkResult copy(Action<? super CopySpec> action) {
+        return fileOperations.copy(action);
     }
 
     public WorkResult sync(Action<? super CopySpec> action) {
@@ -170,7 +174,7 @@ public abstract class DefaultScript extends BasicScript {
     }
 
     public CopySpec copySpec(Closure closure) {
-        return fileOperations.copySpec(closure);
+        return fileOperations.copySpec(new ClosureBackedAction<CopySpec>(closure));
     }
 
     public CopySpec copySpec(Action<? super CopySpec> action) {
@@ -186,11 +190,19 @@ public abstract class DefaultScript extends BasicScript {
     }
 
     public ExecResult javaexec(Closure closure) {
-        return processOperations.javaexec(closure);
+        return processOperations.javaexec(new ClosureBackedAction<JavaExecSpec>(closure));
+    }
+
+    public ExecResult javaexec(Action<? super JavaExecSpec> action) {
+        return processOperations.javaexec(action);
     }
 
     public ExecResult exec(Closure closure) {
-        return processOperations.exec(closure);
+        return processOperations.exec(new ClosureBackedAction<ExecSpec>(closure));
+    }
+
+    public ExecResult exec(Action<? super ExecSpec> action) {
+        return processOperations.exec(action);
     }
 
     public LoggingManager getLogging() {

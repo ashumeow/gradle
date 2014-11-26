@@ -23,7 +23,10 @@ import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.gradle.test.fixtures.ivy.IvyFileRepository
 import org.gradle.test.fixtures.maven.MavenFileRepository
 import org.gradle.test.fixtures.maven.MavenLocalRepository
+import org.hamcrest.CoreMatchers
 import org.junit.Rule
+import org.junit.runners.model.FrameworkMethod
+import org.junit.runners.model.Statement
 import spock.lang.Specification
 
 /**
@@ -32,8 +35,21 @@ import spock.lang.Specification
  * Plan is to bring features over as needed.
  */
 class AbstractIntegrationSpec extends Specification implements TestDirectoryProvider {
-
-    @Rule final TestNameTestDirectoryProvider temporaryFolder = new TestNameTestDirectoryProvider()
+    @Rule final TestNameTestDirectoryProvider temporaryFolder = new TestNameTestDirectoryProvider() {
+        @Override
+        Statement apply(Statement base, FrameworkMethod method, Object target) {
+            return super.apply(new Statement() {
+                @Override
+                void evaluate() throws Throwable {
+                    try {
+                        base.evaluate()
+                    } finally {
+                        cleanupWhileTestFilesExist()
+                    }
+                }
+            }, method, target)
+        }
+    }
 
     GradleDistribution distribution = new UnderDevelopmentGradleDistribution()
     GradleExecuter executer = new GradleContextualExecuter(distribution, temporaryFolder)
@@ -42,6 +58,9 @@ class AbstractIntegrationSpec extends Specification implements TestDirectoryProv
     ExecutionFailure failure
     private MavenFileRepository mavenRepo
     private IvyFileRepository ivyRepo
+
+    protected void cleanupWhileTestFilesExist() {
+    }
 
     protected TestFile getBuildFile() {
         testDirectory.file('build.gradle')
@@ -54,6 +73,10 @@ class AbstractIntegrationSpec extends Specification implements TestDirectoryProv
 
     protected TestFile getSettingsFile() {
         testDirectory.file('settings.gradle')
+    }
+
+    protected TestNameTestDirectoryProvider getTestDirectoryProvider() {
+        temporaryFolder
     }
 
     TestFile getTestDirectory() {
@@ -100,7 +123,7 @@ class AbstractIntegrationSpec extends Specification implements TestDirectoryProv
     }
 
     protected GradleExecuter withDebugLogging() {
-        executer.withArguments("-d")
+        executer.withArgument("-d")
     }
 
     protected ExecutionResult succeeds(String... tasks) {
@@ -159,6 +182,14 @@ class AbstractIntegrationSpec extends Specification implements TestDirectoryProv
     protected void failureHasCause(String cause) {
         failure.assertHasCause(cause)
     }
+
+    protected void failureDescriptionStartsWith(String description) {
+        failure.assertThatDescription(CoreMatchers.startsWith(description))
+    }
+
+    protected void failureDescriptionContains(String description) {
+        failure.assertThatDescription(CoreMatchers.containsString(description))
+    }
     
     private assertHasResult() {
         assert result != null : "result is null, you haven't run succeeds()"
@@ -195,6 +226,19 @@ class AbstractIntegrationSpec extends Specification implements TestDirectoryProv
             mavenRepo = new MavenFileRepository(file("maven-repo"))
         }
         return mavenRepo
+    }
+
+    public MavenFileRepository publishedMavenModules(String ... modulesToPublish) {
+        modulesToPublish.each { String notation ->
+            def modules = notation.split("->").reverse()
+            def current
+            modules.each { String module ->
+                def s = new TestDependency(module)
+                def m = mavenRepo.module(s.group, s.name, s.version)
+                current = current? m.dependsOn(current.groupId, current.artifactId, current.version).publish() : m.publish()
+            }
+        }
+        mavenRepo
     }
 
     public IvyFileRepository ivy(TestFile repo) {

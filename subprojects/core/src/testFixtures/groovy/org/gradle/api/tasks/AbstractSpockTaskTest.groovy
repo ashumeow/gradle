@@ -112,8 +112,8 @@ public abstract class AbstractSpockTaskTest extends Specification {
     def testDependsOn() {
         Task dependsOnTask = createTask(project, "somename");
         Task task = createTask(project, TEST_TASK_NAME);
-        project.getTasks().add("path1");
-        project.getTasks().add("path2");
+        project.getTasks().create("path1");
+        project.getTasks().create("path2");
 
         when:
         task.dependsOn(Project.PATH_SEPARATOR + "path1");
@@ -142,6 +142,18 @@ public abstract class AbstractSpockTaskTest extends Specification {
         then:
         getTask().is( getTask().deleteAllActions())
         new ArrayList() ==  getTask().getActions()
+    }
+
+    def testSetActions() {
+        when:
+        Action action1 = Actions.doNothing();
+        getTask().actions = [action1]
+
+        Action action2 = Actions.doNothing();
+        getTask().actions = [action2]
+
+        then:
+        [new AbstractTask.TaskActionWrapper(action2)] ==  getTask().actions
     }
 
     def testAddActionWithNull() {

@@ -15,7 +15,7 @@
  */
 package org.gradle.profile;
 
-import org.gradle.api.internal.html.SimpleHtmlWriter;
+import org.gradle.internal.html.SimpleHtmlWriter;
 import org.gradle.reporting.DurationFormatter;
 import org.gradle.reporting.HtmlReportRenderer;
 import org.gradle.reporting.ReportRenderer;
@@ -25,15 +25,12 @@ import java.io.File;
 import java.io.IOException;
 
 public class ProfileReportRenderer {
+    private static final DurationFormatter DURATION_FORMAT = new DurationFormatter();
+
     public void writeTo(BuildProfile buildProfile, File file) {
         HtmlReportRenderer renderer = new HtmlReportRenderer();
-        renderer.requireResource(getClass().getResource("/org/gradle/reporting/base-style.css"));
-        renderer.requireResource(getClass().getResource("/org/gradle/reporting/report.js"));
-        renderer.requireResource(getClass().getResource("/org/gradle/reporting/css3-pie-1.0beta3.htc"));
-        renderer.requireResource(getClass().getResource("style.css"));
-        renderer.renderer(new ProfilePageRenderer()).writeTo(buildProfile, file);
+        renderer.renderSinglePage(buildProfile, new ProfilePageRenderer(), file);
     }
-    private static final DurationFormatter DURATION_FORMAT = new DurationFormatter();
 
     private static class ProfilePageRenderer extends TabbedPageRenderer<BuildProfile> {
         @Override

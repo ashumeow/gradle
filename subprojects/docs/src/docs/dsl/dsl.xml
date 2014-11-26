@@ -143,6 +143,9 @@
                 <td>org.gradle.api.Script</td>
             </tr>
             <tr>
+                <td>org.gradle.jvm.toolchain.JavaToolChain</td>
+            </tr>
+            <tr>
                 <td>org.gradle.api.tasks.SourceSet</td>
             </tr>
             <tr>
@@ -156,6 +159,15 @@
             </tr>
             <tr>
                 <td>org.gradle.api.artifacts.ResolutionStrategy</td>
+            </tr>
+            <tr>
+                <td>org.gradle.api.artifacts.query.ArtifactResolutionQuery</td>
+            </tr>
+            <tr>
+                <td>org.gradle.api.artifacts.ComponentSelection</td>
+            </tr>
+            <tr>
+                <td>org.gradle.api.artifacts.ComponentSelectionRules</td>
             </tr>
             <tr>
                 <td>org.gradle.api.dsl.ConventionProperty</td>
@@ -191,7 +203,7 @@
                 <td>org.gradle.api.publish.ivy.IvyArtifactSet</td>
             </tr>
             <tr>
-                <td>org.gradle.api.publish.ivy.IvyModuleDescriptor</td>
+                <td>org.gradle.api.publish.ivy.IvyModuleDescriptorSpec</td>
             </tr>
             <tr>
                 <td>org.gradle.api.publish.maven.MavenPublication</td>
@@ -204,6 +216,18 @@
             </tr>
             <tr>
                 <td>org.gradle.api.publish.maven.MavenPom</td>
+            </tr>
+            <tr>
+                <td>org.gradle.plugin.use.PluginDependenciesSpec</td>
+            </tr>
+            <tr>
+                <td>org.gradle.plugin.use.PluginDependencySpec</td>
+            </tr>
+            <tr>
+                <td>org.gradle.api.resources.ResourceHandler</td>
+            </tr>
+            <tr>
+                <td>org.gradle.api.resources.TextResourceFactory</td>
             </tr>
         </table>
     </section>
@@ -250,6 +274,9 @@
             <tr>
                 <td>org.gradle.api.tasks.diagnostics.PropertyReportTask</td>
             </tr>
+            <tr>
+                <td>org.gradle.api.reporting.components.ComponentReport</td>
+            </tr>
         </table>
     </section>
 
@@ -278,9 +305,6 @@
             </tr>
             <tr>
                 <td>org.gradle.api.tasks.Delete</td>
-            </tr>
-            <tr>
-                <td>org.gradle.api.tasks.Directory</td>
             </tr>
             <tr>
                 <td>org.gradle.plugins.ear.Ear</td>
@@ -365,6 +389,9 @@
             </tr>
             <tr>
                 <td>org.gradle.api.plugins.sonar.SonarAnalyze</td>
+            </tr>
+            <tr>
+                <td>org.gradle.sonar.runner.tasks.SonarRunner</td>
             </tr>
             <tr>
                 <td>org.gradle.api.tasks.Sync</td>
@@ -478,49 +505,76 @@
         <table>
             <title>Native component core types</title>
             <tr>
-                <td>org.gradle.nativebinaries.ProjectNativeComponent</td>
+                <td>org.gradle.nativeplatform.NativeExecutable</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.Executable</td>
+                <td>org.gradle.nativeplatform.NativeLibrary</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.Library</td>
+                <td>org.gradle.nativeplatform.NativeBinary</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.NativeBinary</td>
+                <td>org.gradle.nativeplatform.NativeExecutableBinary</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.ProjectNativeBinary</td>
+                <td>org.gradle.nativeplatform.SharedLibraryBinary</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.ExecutableBinary</td>
+                <td>org.gradle.nativeplatform.StaticLibraryBinary</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.SharedLibraryBinary</td>
+                <td>org.gradle.nativeplatform.PrebuiltLibrary</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.StaticLibraryBinary</td>
+                <td>org.gradle.nativeplatform.PrebuiltSharedLibraryBinary</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.BuildType</td>
+                <td>org.gradle.nativeplatform.PrebuiltStaticLibraryBinary</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.Flavor</td>
+                <td>org.gradle.nativeplatform.NativeComponentSpec</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.platform.Platform</td>
+                <td>org.gradle.nativeplatform.NativeExecutableSpec</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.toolchain.ToolChain</td>
+                <td>org.gradle.nativeplatform.NativeLibrarySpec</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.toolchain.Gcc</td>
+                <td>org.gradle.nativeplatform.NativeBinarySpec</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.toolchain.Clang</td>
+                <td>org.gradle.nativeplatform.NativeExecutableBinarySpec</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.toolchain.VisualCpp</td>
+                <td>org.gradle.nativeplatform.SharedLibraryBinarySpec</td>
+            </tr>
+            <tr>
+                <td>org.gradle.nativeplatform.StaticLibraryBinarySpec</td>
+            </tr>
+            <tr>
+                <td>org.gradle.nativeplatform.BuildType</td>
+            </tr>
+            <tr>
+                <td>org.gradle.nativeplatform.Flavor</td>
+            </tr>
+            <tr>
+                <td>org.gradle.nativeplatform.toolchain.Gcc</td>
+            </tr>
+            <tr>
+                <td>org.gradle.nativeplatform.toolchain.Clang</td>
+            </tr>
+            <tr>
+                <td>org.gradle.nativeplatform.toolchain.VisualCpp</td>
+            </tr>
+            <tr>
+                <td>org.gradle.nativeplatform.test.NativeTestSuiteSpec</td>
+            </tr>
+            <tr>
+                <td>org.gradle.nativeplatform.test.NativeTestSuiteBinarySpec</td>
+            </tr>
+            <tr>
+                <td>org.gradle.nativeplatform.test.cunit.CUnitTestSuiteSpec</td>
             </tr>
             <tr>
                 <td>org.gradle.language.assembler.AssemblerSourceSet</td>
@@ -546,9 +600,6 @@
             <tr>
                 <td>org.gradle.ide.visualstudio.VisualStudioSolution</td>
             </tr>
-            <tr>
-                <td>org.gradle.nativebinaries.test.cunit.CUnitTestSuite</td>
-            </tr>
         </table>
     </section>
     <section>
@@ -557,34 +608,37 @@
         <table>
             <title>Native component task types</title>
             <tr>
-                <td>org.gradle.nativebinaries.language.cpp.tasks.CppCompile</td>
+                <td>org.gradle.language.cpp.tasks.CppCompile</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.language.c.tasks.CCompile</td>
+                <td>org.gradle.language.c.tasks.CCompile</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.language.assembler.tasks.Assemble</td>
+                <td>org.gradle.language.assembler.tasks.Assemble</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.language.objectivec.tasks.ObjectiveCCompile</td>
+                <td>org.gradle.language.objectivec.tasks.ObjectiveCCompile</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.language.objectivecpp.tasks.ObjectiveCppCompile</td>
+                <td>org.gradle.language.objectivecpp.tasks.ObjectiveCppCompile</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.language.rc.tasks.WindowsResourceCompile</td>
+                <td>org.gradle.language.rc.tasks.WindowsResourceCompile</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.tasks.LinkExecutable</td>
+                <td>org.gradle.nativeplatform.tasks.LinkExecutable</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.tasks.LinkSharedLibrary</td>
+                <td>org.gradle.nativeplatform.tasks.LinkSharedLibrary</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.tasks.CreateStaticLibrary</td>
+                <td>org.gradle.nativeplatform.tasks.CreateStaticLibrary</td>
             </tr>
             <tr>
-                <td>org.gradle.nativebinaries.tasks.InstallExecutable</td>
+                <td>org.gradle.nativeplatform.tasks.InstallExecutable</td>
+            </tr>
+            <tr>
+                <td>org.gradle.nativeplatform.test.tasks.RunTestExecutable</td>
             </tr>
         </table>
     </section>

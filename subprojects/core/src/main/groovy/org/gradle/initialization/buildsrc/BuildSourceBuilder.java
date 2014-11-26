@@ -16,12 +16,13 @@
 
 package org.gradle.initialization.buildsrc;
 
-import org.gradle.GradleLauncher;
 import org.gradle.StartParameter;
 import org.gradle.api.internal.initialization.ClassLoaderScope;
 import org.gradle.cache.CacheRepository;
 import org.gradle.cache.PersistentCache;
 import org.gradle.cache.internal.FileLockManager;
+import org.gradle.initialization.BuildCancellationToken;
+import org.gradle.initialization.GradleLauncher;
 import org.gradle.initialization.GradleLauncherFactory;
 import org.gradle.internal.classpath.ClassPath;
 import org.gradle.internal.classpath.DefaultClassPath;
@@ -38,25 +39,24 @@ public class BuildSourceBuilder {
     private static final Logger LOGGER = LoggerFactory.getLogger(BuildSourceBuilder.class);
 
     private final GradleLauncherFactory gradleLauncherFactory;
+    private final BuildCancellationToken cancellationToken;
     private final ClassLoaderScope classLoaderScope;
     private final CacheRepository cacheRepository;
 
-    public BuildSourceBuilder(GradleLauncherFactory gradleLauncherFactory, ClassLoaderScope classLoaderScope, CacheRepository cacheRepository) {
+    public BuildSourceBuilder(GradleLauncherFactory gradleLauncherFactory, BuildCancellationToken cancellationToken,
+                              ClassLoaderScope classLoaderScope, CacheRepository cacheRepository) {
         this.gradleLauncherFactory = gradleLauncherFactory;
+        this.cancellationToken = cancellationToken;
         this.classLoaderScope = classLoaderScope;
         this.cacheRepository = cacheRepository;
     }
 
     public ClassLoaderScope buildAndCreateClassLoader(StartParameter startParameter) {
         ClassPath classpath = createBuildSourceClasspath(startParameter);
-        if (classpath.isEmpty()) {
-            return classLoaderScope;
-        } else {
-            ClassLoaderScope childScope = classLoaderScope.createChild();
-            childScope.export(classpath);
-            childScope.lock();
-            return childScope;
-        }
+        ClassLoaderScope childScope = classLoaderScope.createChild();
+        childScope.export(classpath);
+        childScope.lock();
+        return childScope;
     }
 
     ClassPath createBuildSourceClasspath(StartParameter startParameter) {
@@ -74,7 +74,11 @@ public class BuildSourceBuilder {
         final PersistentCache buildSrcCache = createCache(startParameter);
         try {
             GradleLauncher gradleLauncher = buildGradleLauncher(startParameter);
-            return buildSrcCache.useCache("rebuild buildSrc", new BuildSrcUpdateFactory(buildSrcCache, gradleLauncher, new BuildSrcBuildListenerFactory()));
+            try {
+                return buildSrcCache.useCache("rebuild buildSrc", new BuildSrcUpdateFactory(buildSrcCache, gradleLauncher, new BuildSrcBuildListenerFactory()));
+            } finally {
+                gradleLauncher.stop();
+            }
         } finally {
             // This isn't quite right. We should not unlock the classes until we're finished with them, and the classes may be used across multiple builds
             buildSrcCache.close();
@@ -96,6 +100,6 @@ public class BuildSourceBuilder {
         startParameterArg.setProjectProperties(startParameter.getProjectProperties());
         startParameterArg.setSearchUpwards(false);
         startParameterArg.setProfile(startParameter.isProfile());
-        return gradleLauncherFactory.newInstance(startParameterArg);
+        return gradleLauncherFactory.newInstance(startParameterArg, cancellationToken);
     }
 }

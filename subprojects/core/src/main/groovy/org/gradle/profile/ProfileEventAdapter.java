@@ -27,13 +27,14 @@ import org.gradle.api.execution.TaskExecutionListener;
 import org.gradle.api.initialization.Settings;
 import org.gradle.api.invocation.Gradle;
 import org.gradle.api.tasks.TaskState;
+import org.gradle.initialization.BuildCompletionListener;
 import org.gradle.initialization.BuildRequestMetaData;
 import org.gradle.internal.TimeProvider;
 
 /**
  * Adapts various events to build a {@link BuildProfile} model, and then notifies a {@link ReportGeneratingProfileListener} when the model is ready.
  */
-public class ProfileEventAdapter implements BuildListener, ProjectEvaluationListener, TaskExecutionListener, DependencyResolutionListener {
+public class ProfileEventAdapter implements BuildListener, ProjectEvaluationListener, TaskExecutionListener, DependencyResolutionListener, BuildCompletionListener {
     private final BuildRequestMetaData buildMetaData;
     private final TimeProvider timeProvider;
     private final ProfileListener listener;
@@ -61,11 +62,16 @@ public class ProfileEventAdapter implements BuildListener, ProjectEvaluationList
         buildProfile.setProjectsLoaded(timeProvider.getCurrentTime());
     }
 
-    public void projectsEvaluated(Gradle gradle) {}
+    public void projectsEvaluated(Gradle gradle) {
+        buildProfile.setProjectsEvaluated(timeProvider.getCurrentTime());
+    }
 
     public void buildFinished(BuildResult result) {
-        buildProfile.setBuildFinished(timeProvider.getCurrentTime());
         buildProfile.setSuccessful(result.getFailure() == null);
+    }
+
+    public void completed() {
+        buildProfile.setBuildFinished(timeProvider.getCurrentTime());
         try {
             listener.buildFinished(buildProfile);
         } finally {

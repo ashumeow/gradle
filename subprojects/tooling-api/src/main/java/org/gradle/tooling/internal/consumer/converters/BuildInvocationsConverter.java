@@ -16,53 +16,40 @@
 
 package org.gradle.tooling.internal.consumer.converters;
 
-import com.google.common.base.Function;
 import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
-import org.gradle.tooling.internal.adapter.ProtocolToModelAdapter;
-import org.gradle.tooling.internal.gradle.BasicGradleTaskSelector;
-import org.gradle.tooling.internal.gradle.DefaultBuildInvocations;
-import org.gradle.tooling.internal.gradle.DefaultGradleTask;
+import org.gradle.tooling.internal.gradle.ConsumerProvidedTask;
+import org.gradle.tooling.internal.gradle.ConsumerProvidedTaskSelector;
 import org.gradle.tooling.model.GradleProject;
 import org.gradle.tooling.model.GradleTask;
-import org.gradle.tooling.model.Task;
 
-import java.util.Iterator;
 import java.util.List;
+import java.util.SortedSet;
 
 public class BuildInvocationsConverter {
-    public DefaultBuildInvocations<Task> convert(GradleProject project, ProtocolToModelAdapter adapter) {
-        List<GradleTask> tasks = Lists.newArrayList();
+    public ConsumerProvidedBuildInvocations convert(GradleProject project) {
         GradleProject rootProject = project;
         while (rootProject.getParent() != null) {
             rootProject = rootProject.getParent();
         }
-        List<BasicGradleTaskSelector> selectors = buildRecursively(rootProject, tasks);
-        return new DefaultBuildInvocations<Task>()
-                .setSelectors(selectors)
-                .setTasks(convertTasks(rootProject.getTasks().iterator(), adapter));
+        List<ConsumerProvidedTaskSelector> selectors = buildRecursively(rootProject);
+        return new ConsumerProvidedBuildInvocations(selectors, convertTasks(rootProject.getTasks()));
     }
 
-    private List<BasicGradleTaskSelector> buildRecursively(GradleProject project, List<GradleTask> tasks) {
+    private List<ConsumerProvidedTaskSelector> buildRecursively(GradleProject project) {
         Multimap<String, String> aggregatedTasks = ArrayListMultimap.create();
-        for (GradleProject childProject : project.getChildren()) {
-            List<BasicGradleTaskSelector> childSelectors = buildRecursively(childProject, tasks);
-            for (BasicGradleTaskSelector childSelector : childSelectors) {
-                aggregatedTasks.putAll(childSelector.getName(), childSelector.getTaskNames());
-            }
-        }
-        for (GradleTask task : project.getTasks()) {
-            aggregatedTasks.put(task.getName(), task.getPath());
-            tasks.add(task);
-        }
-        List<BasicGradleTaskSelector> selectors = Lists.newArrayList();
+
+        collectTasks(project, aggregatedTasks);
+
+        List<ConsumerProvidedTaskSelector> selectors = Lists.newArrayList();
         for (String selectorName : aggregatedTasks.keySet()) {
-            selectors.add(new BasicGradleTaskSelector().
+            SortedSet<String> selectorTasks = Sets.newTreeSet(new TaskNameComparator());
+            selectorTasks.addAll(aggregatedTasks.get(selectorName));
+            selectors.add(new ConsumerProvidedTaskSelector().
                     setName(selectorName).
-                    setTaskNames(Sets.newHashSet(aggregatedTasks.get(selectorName))).
+                    setTaskNames(selectorTasks).
                     setDescription(project.getParent() != null
                             ? String.format("%s:%s task selector", project.getPath(), selectorName)
                             : String.format("%s task selector", selectorName)).
@@ -71,17 +58,23 @@ public class BuildInvocationsConverter {
         return selectors;
     }
 
-    private List<Task> convertTasks(Iterator<? extends GradleTask> tasks, final ProtocolToModelAdapter adapter) {
-        return Lists.newArrayList(Iterators.transform(
-                tasks,
-                new Function<GradleTask, Task>() {
-                    public Task apply(GradleTask task) {
-                        return adapter.adapt(Task.class, new DefaultGradleTask()
-                                .setName(task.getName())
-                                .setPath(task.getPath())
-                                .setDescription(task.getDescription()));
-                    }
-                }
-        ));
+    private void collectTasks(GradleProject project, Multimap<String, String> aggregatedTasks) {
+        for (GradleProject childProject : project.getChildren()) {
+            collectTasks(childProject, aggregatedTasks);
+        }
+        for (GradleTask task : project.getTasks()) {
+            aggregatedTasks.put(task.getName(), task.getPath());
+        }
+    }
+
+    private List<ConsumerProvidedTask> convertTasks(Iterable<? extends GradleTask> tasks) {
+        List<ConsumerProvidedTask> result = Lists.newArrayList();
+        for (GradleTask task : tasks) {
+            result.add(new ConsumerProvidedTask()
+                    .setName(task.getName())
+                    .setPath(task.getPath())
+                    .setDescription(task.getDescription()));
+        }
+        return result;
     }
 }

@@ -16,7 +16,6 @@
 
 package org.gradle.internal.service.scopes;
 
-import com.google.common.cache.CacheBuilder;
 import org.gradle.StartParameter;
 import org.gradle.api.Action;
 import org.gradle.api.Project;
@@ -27,10 +26,16 @@ import org.gradle.api.internal.artifacts.ModuleInternal;
 import org.gradle.api.internal.artifacts.configurations.DependencyMetaDataProvider;
 import org.gradle.api.internal.classpath.ModuleRegistry;
 import org.gradle.api.internal.classpath.PluginModuleRegistry;
+import org.gradle.api.internal.component.ComponentTypeRegistry;
+import org.gradle.api.internal.component.DefaultComponentTypeRegistry;
 import org.gradle.api.internal.file.FileLookup;
 import org.gradle.api.internal.file.FileResolver;
-import org.gradle.api.internal.initialization.*;
+import org.gradle.api.internal.initialization.DefaultScriptHandlerFactory;
+import org.gradle.api.internal.initialization.ScriptHandlerFactory;
+import org.gradle.api.internal.initialization.loadercache.ClassLoaderCache;
+import org.gradle.api.internal.initialization.loadercache.ClassLoaderCacheFactory;
 import org.gradle.api.internal.plugins.DefaultPluginRegistry;
+import org.gradle.api.internal.plugins.PluginInspector;
 import org.gradle.api.internal.plugins.PluginRegistry;
 import org.gradle.api.internal.project.*;
 import org.gradle.api.internal.project.taskfactory.AnnotationProcessingTaskFactory;
@@ -44,15 +49,17 @@ import org.gradle.cache.internal.DefaultCacheRepository;
 import org.gradle.cache.internal.DefaultCacheScopeMapping;
 import org.gradle.configuration.*;
 import org.gradle.configuration.project.*;
+import org.gradle.execution.ProjectConfigurer;
+import org.gradle.execution.TaskPathProjectEvaluator;
 import org.gradle.groovy.scripts.DefaultScriptCompilerFactory;
 import org.gradle.groovy.scripts.ScriptCompilerFactory;
 import org.gradle.groovy.scripts.ScriptExecutionListener;
 import org.gradle.groovy.scripts.internal.*;
 import org.gradle.initialization.*;
+import org.gradle.internal.Actions;
 import org.gradle.internal.Factory;
 import org.gradle.internal.TimeProvider;
 import org.gradle.internal.TrueTimeProvider;
-import org.gradle.internal.classloader.CachingClassLoader;
 import org.gradle.internal.classloader.ClassLoaderFactory;
 import org.gradle.internal.concurrent.ExecutorFactory;
 import org.gradle.internal.id.LongIdGenerator;
@@ -61,12 +68,15 @@ import org.gradle.internal.service.DefaultServiceRegistry;
 import org.gradle.internal.service.ServiceRegistration;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.listener.ListenerManager;
+import org.gradle.logging.LoggingConfiguration;
 import org.gradle.logging.LoggingManagerInternal;
 import org.gradle.logging.ProgressLoggerFactory;
+import org.gradle.logging.ShowStacktrace;
 import org.gradle.messaging.actor.ActorFactory;
 import org.gradle.messaging.actor.internal.DefaultActorFactory;
 import org.gradle.messaging.remote.MessagingServer;
-import org.gradle.plugin.internal.PluginResolverFactory;
+import org.gradle.model.internal.inspect.ModelRuleSourceDetector;
+import org.gradle.plugin.use.internal.PluginRequestApplicator;
 import org.gradle.process.internal.DefaultWorkerProcessFactory;
 import org.gradle.process.internal.WorkerProcessBuilder;
 import org.gradle.process.internal.child.WorkerProcessClassPathProvider;
@@ -78,6 +88,7 @@ import org.gradle.util.GradleVersion;
  * Contains the singleton services for a single build invocation.
  */
 public class BuildScopeServices extends DefaultServiceRegistry {
+
     public BuildScopeServices(final ServiceRegistry parent, final StartParameter startParameter) {
         super(parent);
         register(new Action<ServiceRegistration>() {
@@ -115,7 +126,8 @@ public class BuildScopeServices extends DefaultServiceRegistry {
                 new DefaultClassPathProvider(get(ModuleRegistry.class)),
                 new DependencyClassPathProvider(get(ModuleRegistry.class),
                         get(PluginModuleRegistry.class)),
-                get(WorkerProcessClassPathProvider.class));
+                get(WorkerProcessClassPathProvider.class)
+        );
     }
 
     protected WorkerProcessClassPathProvider createWorkerProcessClassPathProvider(CacheRepository cacheRepository, ModuleRegistry moduleRegistry) {
@@ -146,7 +158,6 @@ public class BuildScopeServices extends DefaultServiceRegistry {
         DefaultCacheScopeMapping scopeMapping = new DefaultCacheScopeMapping(startParameter.getGradleUserHomeDir(), startParameter.getProjectCacheDir(), GradleVersion.current());
         return new DefaultCacheRepository(
                 scopeMapping,
-                startParameter.getCacheUsage(),
                 factory);
     }
 
@@ -154,18 +165,20 @@ public class BuildScopeServices extends DefaultServiceRegistry {
         ConfigureActionsProjectEvaluator withActionsEvaluator = new ConfigureActionsProjectEvaluator(
                 new PluginsProjectConfigureActions(get(ClassLoaderRegistry.class).getPluginsClassLoader()),
                 new BuildScriptProcessor(get(ScriptPluginFactory.class)),
-                new DelayedConfigurationActions(),
-                new TaskModelRealizingConfigurationAction(),
-                new ProjectDependencies2TaskResolver()
+                new DelayedConfigurationActions()
         );
-        return new LifecycleProjectEvaluator(withActionsEvaluator);
+        Action<? super ProjectInternal> projectFinalizer = Actions.composite(new TaskModelRealizingConfigurationAction(),
+                new ModelRegistryValidatingConfigurationAction());
+        return new LifecycleProjectEvaluator(withActionsEvaluator, projectFinalizer);
     }
 
     protected ITaskFactory createITaskFactory() {
         return new DependencyAutoWireTaskFactory(
                 new AnnotationProcessingTaskFactory(
                         new TaskFactory(
-                                get(ClassGenerator.class))));
+                                get(ClassGenerator.class))
+                )
+        );
     }
 
     protected ScriptCompilerFactory createScriptCompileFactory(ListenerManager listenerManager, EmptyScriptGenerator emptyScriptGenerator, FileCacheBackedScriptClassCompiler scriptCompiler) {
@@ -174,16 +187,20 @@ public class BuildScopeServices extends DefaultServiceRegistry {
                 new CachingScriptClassCompiler(
                         new ShortCircuitEmptyScriptCompiler(
                                 scriptCompiler,
-                                emptyScriptGenerator)),
+                                emptyScriptGenerator)
+                ),
                 new DefaultScriptRunnerFactory(
-                        scriptExecutionListener));
+                        scriptExecutionListener)
+        );
     }
 
     protected EmptyScriptGenerator createEmptyScriptGenerator() {
         return new AsmBackedEmptyScriptGenerator();
     }
 
-    protected FileCacheBackedScriptClassCompiler createFileCacheBackedScriptClassCompiler(CacheRepository cacheRepository, EmptyScriptGenerator emptyScriptGenerator, final StartParameter startParameter, ProgressLoggerFactory progressLoggerFactory) {
+    protected FileCacheBackedScriptClassCompiler createFileCacheBackedScriptClassCompiler(
+            CacheRepository cacheRepository, EmptyScriptGenerator emptyScriptGenerator, final StartParameter startParameter,
+            ProgressLoggerFactory progressLoggerFactory, ClassLoaderCache classLoaderCache) {
         CacheValidator scriptCacheInvalidator = new CacheValidator() {
             public boolean isValid() {
                 return !startParameter.isRecompileScripts();
@@ -192,9 +209,9 @@ public class BuildScopeServices extends DefaultServiceRegistry {
         return new FileCacheBackedScriptClassCompiler(
                 cacheRepository,
                 scriptCacheInvalidator,
-                new DefaultScriptCompilationHandler(
-                        emptyScriptGenerator),
-                progressLoggerFactory);
+                new DefaultScriptCompilationHandler(emptyScriptGenerator, classLoaderCache),
+                progressLoggerFactory
+        );
     }
 
     protected ScriptPluginFactory createScriptObjectConfigurerFactory() {
@@ -204,8 +221,10 @@ public class BuildScopeServices extends DefaultServiceRegistry {
                 getFactory(LoggingManagerInternal.class),
                 get(Instantiator.class),
                 get(ScriptHandlerFactory.class),
-                get(PluginResolverFactory.class),
-                get(FileLookup.class)
+                get(PluginRequestApplicator.class),
+                get(FileLookup.class),
+                get(DocumentationRegistry.class),
+                get(ModelRuleSourceDetector.class)
         );
     }
 
@@ -227,30 +246,25 @@ public class BuildScopeServices extends DefaultServiceRegistry {
                                 get(Instantiator.class),
                                 get(ServiceRegistryFactory.class)
                         ),
-                        get(IGradlePropertiesLoader.class)),
-                get(IGradlePropertiesLoader.class));
+                        get(IGradlePropertiesLoader.class)
+                ),
+                get(IGradlePropertiesLoader.class)
+        );
     }
 
-    protected ExceptionAnalyser createExceptionAnalyser() {
-        return new MultipleBuildFailuresExceptionAnalyser(new DefaultExceptionAnalyser(get(ListenerManager.class)));
+    protected ExceptionAnalyser createExceptionAnalyser(ListenerManager listenerManager, LoggingConfiguration loggingConfiguration) {
+        ExceptionAnalyser exceptionAnalyser = new MultipleBuildFailuresExceptionAnalyser(new DefaultExceptionAnalyser(listenerManager));
+        if (loggingConfiguration.getShowStacktrace() != ShowStacktrace.ALWAYS_FULL) {
+            exceptionAnalyser = new StackTraceSanitizingExceptionAnalyser(exceptionAnalyser);
+        }
+        return exceptionAnalyser;
     }
 
     protected ScriptHandlerFactory createScriptHandlerFactory() {
         return new DefaultScriptHandlerFactory(
                 get(DependencyManagementServices.class),
                 get(FileResolver.class),
-                new DependencyMetaDataProviderImpl());
-    }
-
-    protected PluginResolverFactory createPluginResolverFactory() {
-        return new PluginResolverFactory(
-                get(PluginRegistry.class),
-                get(Instantiator.class),
-                get(DependencyManagementServices.class),
-                get(FileResolver.class),
-                new DependencyMetaDataProviderImpl(),
-                get(DocumentationRegistry.class),
-                get(CacheRepository.class)
+                get(DependencyMetaDataProvider.class)
         );
     }
 
@@ -264,8 +278,12 @@ public class BuildScopeServices extends DefaultServiceRegistry {
                 new LongIdGenerator());
     }
 
-    protected BuildConfigurer createBuildConfigurer() {
-        return new DefaultBuildConfigurer();
+    protected ProjectConfigurer createProjectConfigurer(BuildCancellationToken cancellationToken) {
+        return new TaskPathProjectEvaluator(cancellationToken);
+    }
+
+    protected BuildConfigurer createBuildConfigurer(ProjectConfigurer projectConfigurer) {
+        return new DefaultBuildConfigurer(projectConfigurer);
     }
 
     protected ProjectAccessListener createProjectAccessListener() {
@@ -276,21 +294,41 @@ public class BuildScopeServices extends DefaultServiceRegistry {
         return new ProfileEventAdapter(get(BuildRequestMetaData.class), get(TimeProvider.class), get(ListenerManager.class).getBroadcaster(ProfileListener.class));
     }
 
-    protected PluginRegistry createPluginRegistry() {
-        return new DefaultPluginRegistry(get(ClassLoaderRegistry.class).getPluginsClassLoader(), new DependencyInjectingInstantiator(this));
+    protected PluginRegistry createPluginRegistry(PluginInspector pluginInspector) {
+        return new DefaultPluginRegistry(pluginInspector, get(ClassLoaderRegistry.class).getPluginsClassLoader());
     }
 
     protected ServiceRegistryFactory createServiceRegistryFactory(final ServiceRegistry services) {
         return new BuildScopeServiceRegistryFactory(services);
     }
 
-    protected ClassLoaderCache createClassLoaderCache() {
-        return new DefaultClassLoaderCache(CacheBuilder.newBuilder().<DefaultClassLoaderCache.Key, ClassLoader>build());
+    protected ClassLoaderScopeRegistry createClassLoaderScopeRegistry(ClassLoaderRegistry classLoaderRegistry, ClassLoaderCache classLoaderCache) {
+        return new DefaultClassLoaderScopeRegistry(classLoaderRegistry, classLoaderCache);
     }
 
-    protected ClassLoaderScope createClassLoaderScope(ClassLoaderRegistry classLoaderRegistry, ClassLoaderCache classLoaderCache) {
-        ClassLoader classLoader = new CachingClassLoader(classLoaderRegistry.getGradleApiClassLoader());
-        return new RootClassLoaderScope(classLoader, classLoaderCache);
+    protected ClassLoaderCache createClassLoaderCache(ClassLoaderCacheFactory cacheFactory) {
+        //the factory is global and makes decision whether classloader cache is shared between builds in given daemon process
+        return cacheFactory.create();
+    }
+
+    protected ProjectTaskLister createProjectTaskLister() {
+        return new DefaultProjectTaskLister();
+    }
+
+    protected DependencyMetaDataProvider createDependencyMetaDataProvider() {
+        return new DependencyMetaDataProviderImpl();
+    }
+
+    protected ComponentTypeRegistry createComponentTypeRegistry() {
+        return new DefaultComponentTypeRegistry();
+    }
+
+    protected ModelRuleSourceDetector createModelRuleSourceDetector() {
+        return new ModelRuleSourceDetector();
+    }
+
+    protected PluginInspector createPluginInspector(ModelRuleSourceDetector modelRuleSourceDetector) {
+        return new PluginInspector(modelRuleSourceDetector);
     }
 
     private class DependencyMetaDataProviderImpl implements DependencyMetaDataProvider {

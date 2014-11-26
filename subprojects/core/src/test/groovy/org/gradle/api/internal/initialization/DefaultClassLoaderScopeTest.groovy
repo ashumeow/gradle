@@ -18,6 +18,8 @@ package org.gradle.api.internal.initialization
 
 import com.google.common.cache.Cache
 import com.google.common.cache.CacheBuilder
+import org.gradle.api.internal.initialization.loadercache.ClassLoaderCache
+import org.gradle.api.internal.initialization.loadercache.DefaultClassLoaderCache
 import org.gradle.internal.classloader.CachingClassLoader
 import org.gradle.internal.classpath.ClassPath
 import org.gradle.internal.classpath.DefaultClassPath
@@ -28,24 +30,22 @@ import spock.lang.Specification
 
 class DefaultClassLoaderScopeTest extends Specification {
 
-    ClassLoader parentClassLoader
-    ClassLoader baseClassLoader
+    ClassLoader rootClassLoader
 
-    ClassLoaderScope parent
-    ClassLoaderScope base
+    ClassLoaderScope root
     ClassLoaderScope scope
 
-    Cache<DefaultClassLoaderCache.Key, ClassLoader> backingCache = CacheBuilder.newBuilder().build();
-    ClassLoaderCache classLoaderCache = new DefaultClassLoaderCache(backingCache);
+    Cache<DefaultClassLoaderCache.Key, ClassLoader> backingCache = CacheBuilder.newBuilder().build()
+    ClassLoaderCache classLoaderCache = new DefaultClassLoaderCache(backingCache)
 
-    @Rule TestNameTestDirectoryProvider testDirectoryProvider = new TestNameTestDirectoryProvider()
+    @Rule
+    TestNameTestDirectoryProvider testDirectoryProvider = new TestNameTestDirectoryProvider()
 
     def setup() {
-        parentClassLoader = new URLClassLoader(classPath("root").asURLArray)
-        baseClassLoader = new URLClassLoader(classPath("base").asURLArray)
-        parent = new RootClassLoaderScope(parentClassLoader, classLoaderCache)
-        base = new RootClassLoaderScope(baseClassLoader, classLoaderCache)
-        scope = new DefaultClassLoaderScope(parent, base, classLoaderCache)
+        file("root/root") << "root"
+        rootClassLoader = new URLClassLoader(classPath("root").asURLArray)
+        root = new RootClassLoaderScope(rootClassLoader, classLoaderCache)
+        scope = root.createChild()
     }
 
     TestFile file(String path) {
@@ -61,70 +61,121 @@ class DefaultClassLoaderScopeTest extends Specification {
         scope.lock()
 
         then:
-        scope.childClassLoader.is parentClassLoader
-        scope.scopeClassLoader.is parentClassLoader
+        scope.localClassLoader.is rootClassLoader
+        scope.exportClassLoader.is rootClassLoader
     }
 
-    def "locked scope with only exports only exports exports"() {
+    def "ignores empty classpaths"() {
         when:
-        file("export/foo") << "bar"
-        def exportClassLoader = scope.export(classPath("export"))
+        scope.export(classPath())
+        scope.local(classPath())
         scope.lock()
 
         then:
-        exportClassLoader.getResource("foo").text == "bar"
-        scope.childClassLoader.is scope.scopeClassLoader
-        scope.scopeClassLoader.getResource("foo").text == "bar"
+        scope.localClassLoader.is rootClassLoader
+        scope.exportClassLoader.is rootClassLoader
+    }
+
+    def "locked scope with only exports uses same export and local loader"() {
+        when:
+        file("export/foo") << "foo"
+        scope.export(classPath("export")).lock()
+
+        then:
+        scope.exportClassLoader.getResource("root").text == "root"
+        scope.exportClassLoader.getResource("foo").text == "foo"
+        scope.exportClassLoader instanceof URLClassLoader
+        scope.exportClassLoader.parent.is rootClassLoader
+        scope.localClassLoader.is scope.exportClassLoader
+    }
+
+    def "can export more than one classpath"() {
+        when:
+        file("export/1/foo") << "foo"
+        file("export/2/bar") << "bar"
+        scope.
+                export(classPath("export/1")).
+                export(classPath("export/2")).
+                lock()
+
+        then:
+        scope.exportClassLoader.getResource("root").text == "root"
+        scope.exportClassLoader.getResource("foo").text == "foo"
+        scope.exportClassLoader.getResource("bar").text == "bar"
+        scope.localClassLoader.is scope.exportClassLoader
     }
 
     def "locked scope with only local exports parent loader to children"() {
         when:
-        file("local/foo") << "bar"
-        def localClassLoader = scope.addLocal(classPath("local"))
-        scope.lock()
+        file("local/1/foo") << "foo"
+        file("local/2/bar") << "bar"
+        scope.
+                local(classPath("local/1")).
+                local(classPath("local/2")).
+                lock()
 
         then:
-        localClassLoader.getResource("foo").text == "bar"
-        scope.childClassLoader.is parentClassLoader
-        scope.scopeClassLoader.getResource("foo").text == "bar"
+        scope.localClassLoader.getResource("root").text == "root"
+        scope.localClassLoader.getResource("foo").text == "foo"
+        scope.localClassLoader.getResource("bar").text == "bar"
+        scope.localClassLoader != scope.exportClassLoader
+        scope.exportClassLoader.is rootClassLoader
+    }
+
+    def "locked scope with only one local exports parent loader to children and uses loader as local loader"() {
+        when:
+        file("local/foo") << "foo"
+        scope.local(classPath("local")).lock()
+
+        then:
+        scope.localClassLoader.getResource("root").text == "root"
+        scope.localClassLoader.getResource("foo").text == "foo"
+        scope.localClassLoader instanceof URLClassLoader
+        scope.localClassLoader.parent.is rootClassLoader
+        scope.exportClassLoader.is rootClassLoader
     }
 
     def "locked scope with local and exports exports custom classloader to children"() {
         when:
         file("local/local") << "bar"
         file("export/export") << "bar"
-        def localClassLoader = scope.addLocal(classPath("local"))
-        def exportClassLoader = scope.export(classPath("export"))
-        scope.lock()
+        scope.
+                local(classPath("local")).
+                export(classPath("export")).
+                lock()
 
         then:
-        localClassLoader.getResource("local").text == "bar"
-        exportClassLoader.getResource("export").text == "bar"
-        scope.childClassLoader.getResource("export").text == "bar"
-        scope.childClassLoader.getResource("local") == null
-        scope.scopeClassLoader instanceof CachingClassLoader
-        scope.scopeClassLoader.getResource("export").text == "bar"
-        scope.scopeClassLoader.getResource("local").text == "bar"
+        scope.exportClassLoader.getResource("export").text == "bar"
+        scope.exportClassLoader.getResource("local") == null
+        scope.exportClassLoader instanceof URLClassLoader
+        scope.exportClassLoader.parent == rootClassLoader
+
+        scope.localClassLoader instanceof CachingClassLoader
+        scope.localClassLoader.getResource("export").text == "bar"
+        scope.localClassLoader.getResource("local").text == "bar"
     }
 
     def "requesting loaders before locking creates pessimistic setup"() {
         given:
-        scope.scopeClassLoader // trigger
+        scope.localClassLoader // trigger
 
         when:
         file("local/local") << "bar"
         file("export/export") << "bar"
-        def localClassLoader = scope.addLocal(classPath("local"))
-        def exportClassLoader = scope.export(classPath("export"))
+        scope.
+                local(classPath("local")).
+                export(classPath("export"))
 
         then:
-        localClassLoader.getResource("local").text == "bar"
-        exportClassLoader.getResource("export").text == "bar"
-        scope.childClassLoader.getResource("export").text == "bar"
-        scope.childClassLoader.getResource("local") == null
-        scope.scopeClassLoader instanceof CachingClassLoader
-        scope.scopeClassLoader.getResource("export").text == "bar"
-        scope.scopeClassLoader.getResource("local").text == "bar"
+        scope.exportClassLoader instanceof CachingClassLoader
+        scope.exportClassLoader.getResource("root").text == "root"
+        scope.exportClassLoader.getResource("export").text == "bar"
+        scope.exportClassLoader.getResource("local") == null
+
+        scope.localClassLoader instanceof CachingClassLoader
+        scope.localClassLoader.getResource("root").text == "root"
+        scope.localClassLoader.getResource("export").text == "bar"
+        scope.localClassLoader.getResource("local").text == "bar"
     }
 
     def "cannot modify after locking"() {
@@ -132,7 +183,7 @@ class DefaultClassLoaderScopeTest extends Specification {
         scope.lock()
 
         when:
-        scope.addLocal(classPath("local"))
+        scope.local(classPath("local"))
 
         then:
         thrown IllegalStateException
@@ -148,52 +199,17 @@ class DefaultClassLoaderScopeTest extends Specification {
         when:
         file("local/local") << "bar"
         file("export/export") << "bar"
-        scope.addLocal(classPath("local"))
+        scope.local(classPath("local"))
         scope.export(classPath("export"))
-        scope.lock()
-        def child = scope.createChild()
-        child.lock()
+        def child = scope.lock().createChild().lock()
 
         then:
-        child.scopeClassLoader.getResource("export").text == "bar"
-        child.scopeClassLoader.getResource("local") == null
-        child.childClassLoader.getResource("export").text == "bar"
-        child.childClassLoader.getResource("local") == null
-    }
-
-    def "sibling scopes can not access exported or local"() {
-        when:
-        file("local/local") << "bar"
-        file("export/export") << "bar"
-        scope.addLocal(classPath("local"))
-        scope.export(classPath("export"))
-        scope.lock()
-        def sibling = scope.createSibling()
-        sibling.lock()
-
-        then:
-        sibling.scopeClassLoader.getResource("export") == null
-        sibling.scopeClassLoader.getResource("local") == null
-        sibling.childClassLoader.getResource("export") == null
-        sibling.childClassLoader.getResource("local") == null
-    }
-
-    def "rebased children local additions can access parent exported"() {
-        when:
-        file("local/local") << "bar"
-        file("export/export") << "bar"
-        scope.addLocal(classPath("local"))
-        scope.export(classPath("export"))
-        scope.lock()
-        def child = scope.createRebasedChild()
-        file("childLocal/childLocal") << "bar"
-        def childLocalClassLoader = child.addLocal(classPath("childLocal"))
-        child.lock()
-
-        then:
-        childLocalClassLoader.getResource("local") == null
-        childLocalClassLoader.getResource("export").text == "bar"
-        childLocalClassLoader.getResource("childLocal").text == "bar"
+        child.localClassLoader.getResource("root").text == "root"
+        child.localClassLoader.getResource("export").text == "bar"
+        child.localClassLoader.getResource("local") == null
+        child.exportClassLoader.getResource("root").text == "root"
+        child.exportClassLoader.getResource("export").text == "bar"
+        child.exportClassLoader.getResource("local") == null
     }
 
     def "class loaders are reused"() {
@@ -201,41 +217,39 @@ class DefaultClassLoaderScopeTest extends Specification {
         backingCache.size() == 0
 
         when:
-        file("c1/c1") << "bar"
-        file("c2/c2") << "bar"
-        def c1ExportLoader = scope.export(classPath("c1"))
-        def c2Local = scope.addLocal(classPath("c2"))
-        scope.lock()
-
-        def sibling = scope.createSibling()
-        def child = scope.createChild()
+        def c1 = classPath("c1")
+        def c2 = classPath("c2")
+        scope.export(c1).local(c2).lock()
+        scope.exportClassLoader
 
         then:
         backingCache.size() == 2
-        sibling.export(classPath("c1")).is c1ExportLoader
+
+        when:
+        def sibling = root.createChild().export(c1).local(c2).lock()
+        sibling.exportClassLoader
+
+        then:
+        sibling.exportClassLoader.is scope.exportClassLoader
         backingCache.size() == 2
 
-        !child.export(classPath("c1")).is(c1ExportLoader) // classpath is the same, but parent is different
-        backingCache.size() == 3
+        when:
+        def child = scope.createChild().export(c1).lock()
+        child.exportClassLoader
 
-        sibling.addLocal(classPath("c2")).is c2Local
-        child.addLocal(classPath("c2")).is c2Local
+        then:
+        child.exportClassLoader != scope.exportClassLoader // classpath is the same, but root is different
         backingCache.size() == 3
     }
 
     def "pessimistic structure has parent visibility"() {
-        when:
-        file("root/root") << "foo"
-
-        then:
-        scope.scopeClassLoader.getResource("root").text == "foo"
+        expect:
+        scope.localClassLoader.getResource("root").text == "root"
     }
 
     def "optimised structure has parent visibility"() {
-        when:
-        file("root/root") << "foo"
-
-        then:
-        scope.lock().scopeClassLoader.getResource("root").text == "foo"
+        expect:
+        scope.lock().localClassLoader.getResource("root").text == "root"
     }
+
 }

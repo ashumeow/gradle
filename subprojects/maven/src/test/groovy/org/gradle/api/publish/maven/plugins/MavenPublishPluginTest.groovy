@@ -26,6 +26,8 @@ import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.internal.publication.DefaultMavenPublication
 import org.gradle.api.publish.maven.tasks.PublishToMavenLocal
 import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
+import org.gradle.api.tasks.TaskContainer
+import org.gradle.model.internal.fixture.ModelRegistryHelper
 import org.gradle.util.TestUtil
 import spock.lang.Specification
 
@@ -37,7 +39,7 @@ class MavenPublishPluginTest extends Specification {
     def component = Stub(SoftwareComponentInternal)
 
     def setup() {
-        project.plugins.apply(MavenPublishPlugin)
+        project.pluginManager.apply(MavenPublishPlugin)
         publishing = project.extensions.getByType(PublishingExtension)
         project.components.add(component)
 
@@ -126,7 +128,7 @@ class MavenPublishPluginTest extends Specification {
     }
 
     void closeTaskContainer() {
-        project.modelRegistry.get("tasks", Object)
+        new ModelRegistryHelper(project.modelRegistry).get("tasks", TaskContainer)
     }
 
     List<PublishToMavenRepository> getPublishTasks() {

@@ -24,6 +24,7 @@ import org.gradle.api.internal.classpath.ModuleRegistry
 import org.gradle.api.internal.classpath.PluginModuleRegistry
 import org.gradle.api.internal.file.FileLookup
 import org.gradle.api.internal.file.FileResolver
+import org.gradle.api.internal.initialization.loadercache.ClassLoaderCacheFactory
 import org.gradle.api.internal.project.*
 import org.gradle.cache.CacheRepository
 import org.gradle.cache.internal.CacheFactory
@@ -44,6 +45,7 @@ import org.gradle.listener.ListenerManager
 import org.gradle.logging.LoggingManagerInternal
 import org.gradle.logging.ProgressLoggerFactory
 import org.gradle.messaging.remote.MessagingServer
+import org.gradle.plugin.use.internal.PluginRequestApplicator
 import org.gradle.process.internal.DefaultWorkerProcessFactory
 import org.gradle.process.internal.WorkerProcessBuilder
 import org.gradle.profile.ProfileEventAdapter
@@ -81,6 +83,9 @@ public class BuildScopeServicesTest extends Specification {
         parent.get(CacheFactory) >> Stub(CacheFactory)
         parent.get(DocumentationRegistry) >> new DocumentationRegistry()
         parent.get(FileLookup) >> Stub(FileLookup)
+        parent.get(PluginRequestApplicator) >> Mock(PluginRequestApplicator)
+        parent.get(BuildCancellationToken) >> Mock(BuildCancellationToken)
+        parent.get(ClassLoaderCacheFactory) >> Stub(ClassLoaderCacheFactory)
     }
 
     def delegatesToParentForUnknownService() {
@@ -173,7 +178,6 @@ public class BuildScopeServicesTest extends Specification {
 
     def providesAnInitScriptHandler() {
         setup:
-        allowGetCoreImplClassLoader()
         expectListenerManagerCreated()
         allowGetGradleDistributionLocator()
 
@@ -184,7 +188,6 @@ public class BuildScopeServicesTest extends Specification {
 
     def providesAScriptObjectConfigurerFactory() {
         setup:
-        allowGetCoreImplClassLoader()
         expectListenerManagerCreated()
         expect:
         assertThat(registry.get(ScriptPluginFactory), instanceOf(DefaultScriptPluginFactory))
@@ -193,7 +196,6 @@ public class BuildScopeServicesTest extends Specification {
 
     def providesASettingsProcessor() {
         setup:
-        allowGetCoreImplClassLoader()
         expectListenerManagerCreated()
         expect:
         assertThat(registry.get(SettingsProcessor), instanceOf(PropertiesLoadingSettingsProcessor))
@@ -204,15 +206,15 @@ public class BuildScopeServicesTest extends Specification {
         setup:
         expectListenerManagerCreated()
         expect:
-        assertThat(registry.get(ExceptionAnalyser), instanceOf(MultipleBuildFailuresExceptionAnalyser))
-        assertThat(registry.get(ExceptionAnalyser).delegate, instanceOf(DefaultExceptionAnalyser))
+        assertThat(registry.get(ExceptionAnalyser), instanceOf(StackTraceSanitizingExceptionAnalyser))
+        assertThat(registry.get(ExceptionAnalyser).analyser, instanceOf(MultipleBuildFailuresExceptionAnalyser))
+        assertThat(registry.get(ExceptionAnalyser).analyser.delegate, instanceOf(DefaultExceptionAnalyser))
         assertThat(registry.get(ExceptionAnalyser), sameInstance(registry.get(ExceptionAnalyser)))
     }
 
     def providesAWorkerProcessFactory() {
         setup:
         expectParentServiceLocated(MessagingServer)
-        allowGetCoreImplClassLoader()
 
         expect:
         assertThat(registry.getFactory(WorkerProcessBuilder), instanceOf(DefaultWorkerProcessFactory))
@@ -221,7 +223,6 @@ public class BuildScopeServicesTest extends Specification {
     def providesAnIsolatedAntBuilder() {
         setup:
         expectParentServiceLocated(ClassLoaderFactory)
-        allowGetCoreImplClassLoader()
         expect:
 
         assertThat(registry.get(IsolatedAntBuilder), instanceOf(DefaultIsolatedAntBuilder))
@@ -289,10 +290,6 @@ public class BuildScopeServicesTest extends Specification {
         parent.get(ListenerManager) >> listenerManagerParent
         1 * listenerManagerParent.createChild() >> listenerManager
         listenerManager
-    }
-
-    private void allowGetCoreImplClassLoader() {
-        classLoaderRegistry.getCoreImplClassLoader() >> new ClassLoader() {}
     }
 
     private void allowGetGradleDistributionLocator() {

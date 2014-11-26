@@ -29,6 +29,7 @@ import org.gradle.tooling.model.GradleProject
 import org.gradle.tooling.model.build.BuildEnvironment
 import org.gradle.tooling.model.eclipse.EclipseProject
 import org.gradle.tooling.model.eclipse.HierarchicalEclipseProject
+import org.gradle.tooling.model.gradle.BuildInvocations
 import org.gradle.tooling.model.gradle.GradleBuild
 import org.gradle.tooling.model.idea.BasicIdeaProject
 import org.gradle.tooling.model.idea.IdeaProject
@@ -52,7 +53,8 @@ class InternalConnectionBackedConsumerConnectionTest extends Specification {
         def details = connection.versionDetails
 
         expect:
-        details.supportsGradleProjectModel()
+        !details.supportsTaskDisplayName()
+        !details.supportsCancellation()
 
         and:
         details.maySupportModel(HierarchicalEclipseProject)
@@ -67,6 +69,7 @@ class InternalConnectionBackedConsumerConnectionTest extends Specification {
         !details.maySupportModel(ProjectOutcomes)
         !details.maySupportModel(CustomModel)
         !details.maySupportModel(GradleBuild)
+        !details.maySupportModel(BuildInvocations)
     }
 
     def "builds GradleBuild model by converting GradleProject"() {

@@ -18,12 +18,11 @@ package org.gradle.launcher.daemon.server
 
 import org.gradle.launcher.daemon.protocol.CloseInput
 import org.gradle.launcher.daemon.protocol.ForwardInput
-import org.gradle.launcher.daemon.server.exec.StdinHandler
+import org.gradle.launcher.daemon.server.api.StdinHandler
 import org.gradle.messaging.remote.internal.Connection
 import org.gradle.util.ConcurrentSpecification
 
 import java.util.concurrent.CountDownLatch
-import org.gradle.launcher.daemon.protocol.Stop
 import java.util.concurrent.TimeUnit
 
 class DefaultDaemonConnectionTest extends ConcurrentSpecification {
